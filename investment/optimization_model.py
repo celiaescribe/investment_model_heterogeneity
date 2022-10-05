@@ -249,67 +249,6 @@ def coefficient_f_cvar(Q: np.ndarray, D_cvar, premium,
     return profit
 
 
-def calculate_cvar(alpha, start, end, gas_scenarios, proba_worst_demand, Q: np.ndarray, D_cvar, premium,
-                   weather_tot_params, Q_offshore, tec, x_cutoff, y_cutoff, add_params):
-    """
-    Returns the CVAR corresponding to coefficient f for a given level alpha. Uncertainty comes from evolution of demand
-     level, different gas price scenarios, and from different weather data years.
-     REMARK: we still consider that the cutoff points have been chosen correctly to match the demand cvar scenarios.
-     This is a preprocessing step.
-    Parameters
-    ----------
-    start: int
-        Start year to consider when calculating cvar
-    end: int
-        End year to consider when calculating cvar
-    gas_scenarios: np.array
-        List of scenarios for delta in gas prices
-    Returns
-    -------
-
-    """
-    # We consider that, as for coef_f, Q is at time t, and therefore has t+1 dimensions
-    Delta_t = add_params["Delta_t"]
-    years = weather_tot_params["years"]
-    premium = np.array([premium])  # shape (1,)
-    # y_cutoff = np.array(y_cutoff)  # shape (d,K) where K is the number of cutoff points
-    # x_cutoff = np.array(x_cutoff)
-    coef_f_values_list = []
-    TIKTOK("Calculate CVAR", display=False)
-    for i in range(gas_scenarios.shape[0]):
-        # TIKTOK(f"Beginning loop, i={i}")
-        scenario = gas_scenarios[i]
-        y_cutoff_scenario = []
-        for k in range(len(y_cutoff)):
-            # TIKTOK(f"Updating y_cutoff, k={k}")
-            y_cutoff_gas = y_cutoff[k][
-                           2:]  # TODO: pour l'instant, j'augmente également le prix du charbon, sans doute une approximation pas très grave
-            y_cutoff_gas = list(y_cutoff_gas + scenario)
-            y_cutoff_k_scenario = y_cutoff[k][0:2] + y_cutoff_gas
-            y_cutoff_scenario.append(y_cutoff_k_scenario)
-        # TIKTOK("Calculate profit")
-        profit = coefficient_f_cvar(Q, D_cvar, premium, weather_tot_params, Q_offshore, tec, x_cutoff,
-                                    y_cutoff_scenario, add_params)  # shape (n,) + (d,)*t
-        for y in np.arange(start, end + 1, 1):
-            # TIKTOK(f"Calculate year y={y}")
-            mask = (years == y)
-            coef_f = profit[mask, ...].sum(0) * Delta_t  # shape (d,)*(t+1)
-            coef_f = coef_f.reshape(
-                coef_f.shape + (1,))  # we add an axis at the end, corresponding to the scenario axis
-            coef_f_values_list.append(coef_f)
-
-    coef_f_values = np.concatenate(coef_f_values_list, axis=-1)
-    # coef_f_values has shape (d,)*(t+1) + (M,) where M is the total number of scenarios
-    coef_f_values = np.sort(coef_f_values, axis=-1)  # we sort according to the last axis, corresponding to scenarios
-    nb_scenarios_cvar = int(np.round(coef_f_values.shape[-1] * alpha))
-    coef_f_values_cvar = np.stack(
-        [coef_f_values[..., i, 0:int(nb_scenarios_cvar * 1 / p)].mean(axis=-1) for i, p in
-         enumerate(proba_worst_demand)],
-        axis=-1)  # peut etre problème avec un max, si jamais on obtenait un nombre supérieur à la dernière dimension
-    TIKTOK("End of calculate_cvar", display=True)
-    return coef_f_values_cvar  # shape (d,)*(t+1)
-
-
 def calculate_cvar_par(alpha, start, end, gas_scenarios, proba_worst_demand, Q: np.ndarray, D_cvar, premium,
                        weather_tot_params, Q_offshore, tec, x_cutoff, y_cutoff, add_params):
     """
@@ -397,7 +336,7 @@ def coefficient_g_no_deval(T, Tprime, Q: np.ndarray, D_average, premium, weather
     if Tprime > T:
         coef_g = - coefficient_f(Q, D_average, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff, add_params)
         for t in range(T + 1, Tprime, 1):
-            coef_g += -np.exp(-discount_rate * (t - T)) * coefficient_f( Q, D_average, premium, weather_params,
+            coef_g += -np.exp(-discount_rate * (t - T)) * coefficient_f(Q, D_average, premium, weather_params,
                                                                          Q_offshore, tec, x_cutoff, y_cutoff,
                                                                          add_params)  # shape (d,)*(T+1)
     else:
@@ -469,8 +408,8 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
     # function works for t < T-1 (for T-1, we have a specific initialization function)
     assert type(Q_t) == type(q_next) == np.ndarray, "Q and q_next should be of array type"
     trans_matrix_t = trans_matrix[t, :, :]  # shape (d,d)
-    assert q_next.ndim == t + 2, "Parameter q_next should have t+2 dimensions corresponding to all possible paths until" \
-                                 "time t+1 "
+    assert q_next.ndim == t + 2 + 1, "Parameter q_next should have t+2 dimensions corresponding to all possible paths until" \
+                                 "time t+1 and a first dimension corresponding to parameter beta "
     assert Q_t.ndim == t + 2, "Parameter Q should have t+2 dimensions corresponding to all possible paths until time t," \
                               "for both wind and solar "
     assert q_next.shape[-1] == trans_matrix_t.shape[-1], "Parameter q_next should have the same last dimension as the " \
@@ -480,7 +419,7 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
     assert Q_t.shape[-1] == trans_matrix_t.shape[0], "Last dimension of parameter Q should be the same as the first " \
                                                      "dimension of trans_matrix_t "
     expectation_qnext = (q_next * trans_matrix_t).sum(-1)  # shape (d,)*(t+1)
-    assert expectation_qnext.ndim == t + 1, "Intermediate calculations to check, wrong dimension obtained"
+    assert expectation_qnext.ndim == t + 1 + 1, "Intermediate calculations to check, wrong dimension obtained, maybe problem with list_beta"
     # Natural broadcasting should work as expected, as Numpy starts with the rightmost dimensions and works its way left
     D_average_t = demand_states[t, :]  # possible value of demand during interval [t:t+1]
     assert D_average_t.shape[0] == q_next.shape[
@@ -502,26 +441,23 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
     cvar_coefficient_f = calculate_cvar_par(alpha, start, end, gas_scenarios, proba_worst_demand, Q_t, D_cvar_t,
                                             premium, weather_tot_params, Q_offshore_t_cvar, tec, x_cutoff_t_cvar,
                                             y_cutoff_t_cvar, add_params)  # shape (d,)*(t+1)
-    # cvar_coefficient_f = calculate_cvar(alpha, start, end, gas_scenarios, proba_worst_demand, Q_t, D_cvar_t,
-    #                                         premium, weather_tot_params, Q_offshore_t_cvar, tec, x_cutoff_t_cvar,
-    #                                         y_cutoff_t_cvar, add_params)  # shape (d,)*(t+1)
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
     expectation_coefficient_f_tilde_beta = []
     for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
         expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
-        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape((1,) + expectation_coefficient_f_tilde.shape)
+        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape((1,) + expectation_coefficient_f_tilde.shape)  # we add a first dimension corresponding to parameter beta
         expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
 
-    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)  # concatenate along first axis
 
     investment_costs = add_params[f'investment_costs_{tec}']
     Delta_investment_costs = investment_costs[t] - (1 - nu_deval) * np.exp(-discount_rate) * investment_costs[
         t + 1]  # should be positive
     q_t = 1 / (2 * c_tilde) * (expectation_coefficient_f_tilde - Delta_investment_costs) + (1 - nu_deval) * np.exp(
-        -discount_rate) * expectation_qnext.reshape((1,) + expectation_qnext.shape)  # shape L,(d,)*(t+1)
-    assert q_t.ndim == t + 1 + 1  # we add a dimension for beta
+        -discount_rate) * expectation_qnext.reshape((1,) + expectation_qnext.shape)  # shape (L,) + (d,)*(t+1)
+    assert q_t.ndim == t + 1 + 1  # we added a dimension for beta
     return q_t
 
 
@@ -547,15 +483,11 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
     x_cutoff_T_1_cvar = [x_cutoff_T_1[i] for i in ind_cvar]
     y_cutoff_T_1_cvar = [y_cutoff_T_1[i] for i in ind_cvar]
     Q_offshore_T_1_cvar = [Q_offshore_T_1[i] for i in ind_cvar]
-    # TODO: je change cette ligne
     cvar_coefficient_f = calculate_cvar_par(alpha, start, end, gas_scenarios, proba_worst_demand, Q_T_1, D_cvar_T_1,
                                             premium,
                                             weather_tot_params, Q_offshore_T_1_cvar, tec, x_cutoff_T_1_cvar,
                                             y_cutoff_T_1_cvar, add_params)  # shape (d,)*(T)
-    # cvar_coefficient_f = calculate_cvar(alpha, start, end, gas_scenarios, proba_worst_demand, Q_T_1, D_cvar_T_1,
-    #                                         premium,
-    #                                         weather_tot_params, Q_offshore_T_1_cvar, tec, x_cutoff_T_1_cvar,
-    #                                         y_cutoff_T_1_cvar, add_params)  # shape (d,)*(T)
+
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
     expectation_coefficient_f_tilde_beta = []
@@ -581,10 +513,10 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
     # return 1 / (2 * c_tilde) * (
     #         expectation_coefficient_f_tilde - np.exp(-discount_rate) * (1 - nu_deval) * expectation_coefficient_g -
     #         investment_costs[T - 1])  # shape (d,)*T
-    # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation
+    # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation, et je reshape expectation_coefficient_g car il ne prend pas en compte d'aversion au risque
     return 1 / (2 * c_tilde) * (
             expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g.reshape((1,) + expectation_coefficient_g.shape) -
-            investment_costs[T - 1])  # shape L,(d,)*T
+            investment_costs[T - 1])  # shape (L,) + (d,)*T
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 
 

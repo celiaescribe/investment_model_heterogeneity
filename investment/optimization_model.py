@@ -780,6 +780,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
 def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, beta, alpha, start, end,
                     gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, x_cutoff, y_cutoff,
                     add_params, convergence):
+    # Test change commit
     """
 
     Parameters

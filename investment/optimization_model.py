@@ -601,7 +601,14 @@ def state_distribution_from_control(control_sun, control_wind, add_params):
 
 
 def average_state_distribution_beta(state_distribution, list_weight_beta):
-    """Calculates the average state over the whole beta distribution."""
+    """Calculates the average state over the whole beta distribution.
+    Parameters
+    ----------
+    state_distribution: list
+        Includes a first dimension corresponding to beta heterogeneity
+    list_weight_beta: list
+        List of weights (proba) associated to each possible value for beta
+    """
     new_state_distribution = []
     T = len(state_distribution)
     for t in range(1, T, 1):
@@ -783,7 +790,13 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                           f"{len(state_init)} "
     assert convergence in ['wolfe', 'fictitious'], "Parameter convergence does not take allowed value."
     average_state_distribution = state_init
-    previous_control_sun, previous_control_wind = control_from_state(average_state_distribution, add_params)
+    state_distribution = []  # we create an initial distribution including beta heterogeneity
+    for t in range(0, len(average_state_distribution), 1):
+        state_distribution_sun_t = np.repeat(average_state_distribution[t][0][np.newaxis, ...], len(list_beta), axis=0)
+        state_distribution_wind_t = np.repeat(average_state_distribution[t][1][np.newaxis, ...], len(list_beta), axis=0)
+        state_distribution.append(np.array([state_distribution_sun_t, state_distribution_wind_t]))
+
+    previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)  # includes beta heterogeneity
     history_state_distribution = []  # maybe necessary if we want to check if optimal control moves a lot or not
     objective_gap = []
     index_objective_gap = []
@@ -805,7 +818,7 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
 
         # Finding associated state distribution
         new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # includes the different beta
-        new_average_state_distribution = average_state_distribution_beta(new_state_distribution, list_weight_beta)
+        new_average_state_distribution = average_state_distribution_beta(new_state_distribution, list_weight_beta)  # averaged over the beta
 
         if n % 20 == 0:
             TIKTOK.interval("optimal_control", display=True)
@@ -841,8 +854,12 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
         if convergence == 'wolfe':
             average_state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
                                   for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
+            state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
+                                          for new_state, state in zip(new_state_distribution, state_distribution)]
         else:  # 'fictitious'
             average_state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
                                   for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
-        previous_control_sun, previous_control_wind = control_from_state(average_state_distribution, add_params)
+            state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
+                                  for new_state, state in zip(new_state_distribution, state_distribution)]
+        previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)
     return state_distribution, np.array(objective_gap), np.array(index_objective_gap)

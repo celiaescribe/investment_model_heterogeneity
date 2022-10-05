@@ -764,7 +764,7 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
 
 
 def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, list_beta,
-                alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
+                list_weight_beta, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
                 x_cutoff: list, y_cutoff: list, add_params):
     """Returns total player's cost for a given strategy and corresponding state distribution"""
     discount_rate, nu_deval = add_params["discount_rate"], add_params["nu_deval"]
@@ -790,23 +790,34 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
         # total_cost = total_cost + cost_t
         proba_time_t = proba_time_t_next  # shape (d,)*(t+2)
     D_average_T = demand_states[T - 1, :]
-    Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
-    coef_g = concatenate_coef_g(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
+    # Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
+    Q_T = other_state_distribution[T - 1]  # TODO: attention, j'ai changé cela pour arrêter la dévaluation, il pourrait y avoir une erreur
+    coef_g = concatenate_coef_g_no_deval(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
                                 Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
                                 add_params)  # shape (d,)*(T+1)
 
-    if tec == 'sun':
+    # if tec == 'sun':
+    #     cost_final = np.exp(-discount_rate * T) * \
+    #                  (state_distribution[T - 1][0] * (1 - nu_deval)).reshape(
+    #                      state_distribution[T - 1][0].shape + (1,)) * coef_g  # shape (d,)*(T+1)
+    # else:
+    #     cost_final = np.exp(-discount_rate * T) * \
+    #                  (state_distribution[T - 1][1] * (1 - nu_deval)).reshape(
+    #                      state_distribution[T - 1][1].shape + (1,)) * coef_g  # shape (d,)*(T+1)
+    if tec == 'sun':  # TODO: pareil, j'ai changé pour enlever la dévaluation de coef_g, il pourrait y avoir des bugs
         cost_final = np.exp(-discount_rate * T) * \
-                     (state_distribution[T - 1][0] * (1 - nu_deval)).reshape(
+                     (state_distribution[T - 1][0]).reshape(
                          state_distribution[T - 1][0].shape + (1,)) * coef_g  # shape (d,)*(T+1)
     else:
         cost_final = np.exp(-discount_rate * T) * \
-                     (state_distribution[T - 1][1] * (1 - nu_deval)).reshape(
+                     (state_distribution[T - 1][1]).reshape(
                          state_distribution[T - 1][1].shape + (1,)) * coef_g  # shape (d,)*(T+1)
     assert cost_final.shape == proba_time_t.shape
     cost_final_with_proba = cost_final * proba_time_t
     cost_T = cost_final_with_proba.sum()
-    total_cost += cost_T
+    list_total_cost_beta = [total_cost + cost_T for total_cost in list_total_cost_beta]
+    # total_cost += cost_T
+    total_cost = sum([total_cost * weight_beta for (total_cost, weight_beta) in zip(list_total_cost_beta, list_weight_beta)])
     return total_cost
 
 

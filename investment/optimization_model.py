@@ -842,12 +842,12 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
         state_init) == T, f"Initial state distribution for other players should be of length {T}, instead length " \
                           f"{len(state_init)} "
     assert convergence in ['wolfe', 'fictitious'], "Parameter convergence does not take allowed value."
-    state_distribution = state_init
-    previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)
+    average_state_distribution = state_init
+    previous_control_sun, previous_control_wind = control_from_state(average_state_distribution, add_params)
     history_state_distribution = []  # maybe necessary if we want to check if optimal control moves a lot or not
     objective_gap = []
     index_objective_gap = []
-    history_state_distribution.append(state_distribution)
+    history_state_distribution.append(average_state_distribution)
 
     for n in range(N):
         print(n, flush=True)
@@ -856,11 +856,11 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
         # Finding optimal control
         TIKTOK.interval("optimal_control", display=False)
         opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
-                                               gas_scenarios, state_distribution, premium, weather_params,
+                                               gas_scenarios, average_state_distribution, premium, weather_params,
                                                weather_tot_params, Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
         opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
-                                                gas_scenarios, state_distribution, premium, weather_params,
+                                                gas_scenarios, average_state_distribution, premium, weather_params,
                                                 weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
         # Finding associated state distribution
@@ -869,25 +869,25 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
 
         if n % 20 == 0:
             TIKTOK.interval("optimal_control", display=True)
-
+            # TODO: a corriger !! il faut modifier l'appel à new_state_distribution, car on a des états qui diffèrent selon le paramètre beta
             current_player_cost_sun = player_cost(T, Tprime, opt_control_sun, new_state_distribution,
-                                                  state_distribution, trans_matrix, demand_states, beta, alpha, start,
-                                                  end, gas_scenarios, premium, weather_params, weather_tot_params,
+                                                  average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                  alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                   Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
             previous_player_cost_sun = player_cost(T, Tprime, previous_control_sun, state_distribution,
-                                                   state_distribution, trans_matrix, demand_states, beta, alpha, start,
-                                                   end, gas_scenarios, premium, weather_params, weather_tot_params,
+                                                   average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                   alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                    Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
             current_player_cost_wind = player_cost(T, Tprime, opt_control_wind, new_state_distribution,
-                                                   state_distribution, trans_matrix, demand_states, beta, alpha, start,
-                                                   end, gas_scenarios, premium, weather_params, weather_tot_params,
+                                                   average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                   alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                    Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
             previous_player_cost_wind = player_cost(T, Tprime, previous_control_wind, state_distribution,
-                                                    state_distribution, trans_matrix, demand_states, beta, alpha, start,
-                                                    end, gas_scenarios, premium, weather_params, weather_tot_params,
+                                                    average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                    alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                     Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
             gap = (current_player_cost_sun - previous_player_cost_sun) + (
@@ -899,10 +899,10 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
             if n % 100 == 0:
                 print(f'Objective gap: {objective_gap}', flush=True)
         if convergence == 'wolfe':
-            state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
-                                  for new_state, state in zip(new_state_distribution, state_distribution)]
+            average_state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
+                                  for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
         else:  # 'fictitious'
-            state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
-                                  for new_state, state in zip(new_state_distribution, state_distribution)]
-        previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)
+            average_state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
+                                  for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
+        previous_control_sun, previous_control_wind = control_from_state(average_state_distribution, add_params)
     return state_distribution, np.array(objective_gap), np.array(index_objective_gap)

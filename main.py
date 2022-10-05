@@ -1,5 +1,5 @@
 from investment.optimization_model import *
-from investment.data_loading import data_process_with_scenarios
+from investment.data_loading import data_process_with_scenarios, load_all_weather_data
 from investment.demand_model import demand_model
 import seaborn as sns
 import datetime
@@ -128,21 +128,17 @@ if __name__ == '__main__':
 
     N = 10
     beta = 1
+    list_beta = [0.2, 0.8]
+    list_weight_beta = [0.5, 0.5]
     # Run algorithm
-    state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T, Tprime=Tprime,
-                                                                             state_init=strategy_init,
-                                                                             trans_matrix=trans_matrix,
-                                                                             demand_states=demand_states,
-                                                                             beta=beta,
-                                                                             alpha=0.05,
-                                                                             start=1980,
-                                                                             end=2019,
-                                                                             gas_scenarios=variation_gas,
-                                                                             premium=premium,
+    state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T, Tprime=Tprime, state_init=strategy_init,
+                                                                             trans_matrix=trans_matrix, demand_states=demand_states,
+                                                                             list_beta=list_beta,
+                                                                             list_weight_beta=list_weight_beta,
+                                                                             alpha=0.05, start=1980, end=2019,
+                                                                             gas_scenarios=variation_gas, premium=premium,
                                                                              weather_params=weather_params,
                                                                              weather_tot_params=weather_tot_params,
-                                                                             Q_offshore=Q_offshore,
-                                                                             x_cutoff=x_cutoff,
-                                                                             y_cutoff=y_cutoff,
-                                                                             add_params=additional_parameters,
+                                                                             Q_offshore=Q_offshore, x_cutoff=x_cutoff,
+                                                                             y_cutoff=y_cutoff, add_params=additional_parameters,
                                                                              convergence="wolfe")

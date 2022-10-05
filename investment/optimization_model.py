@@ -593,8 +593,8 @@ def state_distribution_from_control(control_sun, control_wind, add_params):
             t]  # broadcasting to add a final dimension corresponding to new state
         state_t_wind = ((1 - nu_deval) * previous_state[1]).reshape(previous_state[1].shape + (1,)) + control_wind[
             t]
-        assert state_t_sun.ndim == t + 1
-        assert state_t_wind.ndim == t + 1
+        # assert state_t_sun.ndim == t + 1
+        # assert state_t_wind.ndim == t + 1  # we remove the assert statement as it may no longer hold because of beta
         previous_state = np.array([state_t_sun, state_t_wind])  # shape (2,) + (d,)*(t+1)
         state_distribution.append(previous_state)
     return state_distribution
@@ -638,8 +638,8 @@ def control_from_state(state_distribution, add_params):
             state_distribution[t - 1][0].shape + (1,)) + state_distribution[t][0]  # broadcasting done naturally
         control_t_wind = -((1 - nu_deval) * state_distribution[t - 1][1]).reshape(
             state_distribution[t - 1][1].shape + (1,)) + state_distribution[t][1]  # broadcasting done naturally
-        assert control_t_sun.ndim == t + 1
-        assert control_t_wind.ndim == t + 1
+        # assert control_t_sun.ndim == t + 1
+        # assert control_t_wind.ndim == t + 1  # we remove those checks: this may not be true anymore
         control_distribution_sun.append(control_t_sun)
         control_distribution_wind.append(control_t_wind)
     return control_distribution_sun, control_distribution_wind  # should be ok
@@ -660,7 +660,7 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
                 Q_offshore_t, tec, x_cutoff_t, y_cutoff_t, add_params):
     """Returns expected cost at time t specified for each possible uncertainty path"""
     assert opt_control_t.ndim == state_distribution_t.ndim == t + 1 + 1  # here, we added one dimension for the beta
-    assert other_state_distribution_t.ndim - 1 == t + 1
+    assert other_state_distribution_t.ndim - 1 == t + 1  # no dimension for beta in the aggregate distribution
     discount_rate, investment_costs, c_tilde = add_params["discount_rate"], add_params[f'investment_costs_{tec}'], \
                                                add_params[f'c_tilde_{tec}']
     trans_matrix_t = trans_matrix[t, :, :]  # shape (d,d)
@@ -685,7 +685,7 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
                                             other_state_distribution_t, D_cvar_t, premium, weather_tot_params,
                                             Q_offshore_t_cvar, tec, x_cutoff_t_cvar, y_cutoff_t_cvar,
                                             add_params)  # shape (d,)*(t+1)
-    assert state_distribution_t[0,...].shape == cvar_coefficient_f.shape == proba_time_t.shape  # we need to remove first dimension associated with beta
+    assert state_distribution_t[0,...].shape == cvar_coefficient_f.shape == proba_time_t.shape  # we need to remove first dimension associated with beta in the state distribution
 
     list_cost_beta = []
     for i in range(list_beta):  # here, we pay attention to selecting only state and control associated with given beta
@@ -780,7 +780,7 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
     T
     Tprime
     state_init: list
-        Element t is of dim (2,) + (d,)*(t+1) and corresponds to state distribution for sun and wind
+        Element t is of dim (2,) + (d,)*(t+1) and corresponds to average state distribution for sun and wind
     Returns
     -------
 

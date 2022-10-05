@@ -47,7 +47,7 @@ TIKTOK = TikTok()
 
 def supply_function_np_piecewise(x: np.ndarray, x_cutoff: np.ndarray, y_cutoff: np.ndarray, voll):
     """
-    Returns price corresponding to residual demand
+    Returns price corresponding to residual demand. Piecewise affine function.
     Parameters
     ----------
     x: residual demand
@@ -73,7 +73,7 @@ def supply_function_np_piecewise(x: np.ndarray, x_cutoff: np.ndarray, y_cutoff: 
 
 def supply_function_np_piecewise_constant(x: np.ndarray, x_cutoff: np.ndarray, y_cutoff: np.ndarray, voll):
     """
-    Returns price corresponding to residual demand
+    Returns price corresponding to residual demand. Piecewise constanat function.
     Parameters
     ----------
     x: residual demand
@@ -387,6 +387,24 @@ def coefficient_g(T, Tprime, Q: np.ndarray, D_average, premium, weather_params, 
     return coef_g
 
 
+def coefficient_g_no_deval(T, Tprime, Q: np.ndarray, D_average, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff,
+                  add_params):
+    """Returns coefficient g representing the end of the profit after time T, which depends
+    on the value of demand at time T-1. Q represents invested capacity at time T (and not time T-1 !!)"""
+    assert Q.ndim - 1 == T  # corresponds to investment decision at time T-1 (after being devaluated once), plus one
+    # dimension for sun and wind
+    discount_rate, nu_deval = add_params['discount_rate'], add_params['nu_deval']
+    if Tprime > T:
+        coef_g = - coefficient_f(Q, D_average, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff, add_params)
+        for t in range(T + 1, Tprime, 1):
+            coef_g += -np.exp(-discount_rate * (t - T)) * coefficient_f( Q, D_average, premium, weather_params,
+                                                                         Q_offshore, tec, x_cutoff, y_cutoff,
+                                                                         add_params)  # shape (d,)*(T+1)
+    else:
+        coef_g = np.zeros((D_average.shape[0],) * (T + 1))  # adding option that we do not account for further profit
+    return coef_g
+
+
 def concatenate_coef_g(T, Tprime, Q, demand_states_time_T, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff,
                        add_params):
     """Compiling coefficient_g for different values of demand, to allow for the simultaneous evolution of the cutoff
@@ -396,6 +414,20 @@ def concatenate_coef_g(T, Tprime, Q, demand_states_time_T, premium, weather_para
                                   add_params)  # first initialize for the first value of demand
     for i in range(1, demand_states_time_T.shape[0], 1):  # iterate for all possible values of demand and cutoffs
         coef_g_values_demand = coefficient_g(T, Tprime, Q, np.array([demand_states_time_T[i]]), premium, weather_params,
+                                             Q_offshore[i], tec, x_cutoff[i], y_cutoff[i], add_params)
+        coef_g_values = np.concatenate((coef_g_values, coef_g_values_demand), axis=-1)
+    return coef_g_values  # shape (d,)*(T+1)
+
+
+def concatenate_coef_g_no_deval(T, Tprime, Q, demand_states_time_T, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff,
+                       add_params):
+    """Compiling coefficient_g for different values of demand, to allow for the simultaneous evolution of the cutoff
+    points as well as the offshore values."""
+    coef_g_values = coefficient_g_no_deval(T, Tprime, Q, np.array([demand_states_time_T[0]]), premium, weather_params,
+                                  Q_offshore[0], tec, x_cutoff[0], y_cutoff[0],
+                                  add_params)  # first initialize for the first value of demand
+    for i in range(1, demand_states_time_T.shape[0], 1):  # iterate for all possible values of demand and cutoffs
+        coef_g_values_demand = coefficient_g_no_deval(T, Tprime, Q, np.array([demand_states_time_T[i]]), premium, weather_params,
                                              Q_offshore[i], tec, x_cutoff[i], y_cutoff[i], add_params)
         coef_g_values = np.concatenate((coef_g_values, coef_g_values_demand), axis=-1)
     return coef_g_values  # shape (d,)*(T+1)
@@ -519,8 +551,11 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, s
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
     expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
 
-    coef_g_values = concatenate_coef_g(T, Tprime, Q_T_1 * (1 - nu_deval), D_average_T_1, premium, weather_params,
+    # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
+    coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
                                        Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+    # coef_g_values = concatenate_coef_g(T, Tprime, Q_T_1 * (1 - nu_deval), D_average_T_1, premium, weather_params,
+    #                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
 
     assert coef_g_values.ndim == T + 1
     # We devaluate one time Q for coef_g_values, as the investment decision was taken at time T-1, and so they have
@@ -528,8 +563,12 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, s
     expectation_coefficient_g = (trans_matrix_T_1 * coef_g_values).sum(-1)  # shape (d,)*T
 
     investment_costs = add_params[f'investment_costs_{tec}']
+    # return 1 / (2 * c_tilde) * (
+    #         expectation_coefficient_f_tilde - np.exp(-discount_rate) * (1 - nu_deval) * expectation_coefficient_g -
+    #         investment_costs[T - 1])  # shape (d,)*T
+    # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation
     return 1 / (2 * c_tilde) * (
-            expectation_coefficient_f_tilde - np.exp(-discount_rate) * (1 - nu_deval) * expectation_coefficient_g -
+            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g -
             investment_costs[T - 1])  # shape (d,)*T
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 

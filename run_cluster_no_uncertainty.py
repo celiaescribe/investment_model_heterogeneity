@@ -104,7 +104,7 @@ for beta in list_beta:
             "proba": probability
         }
         demand_centered_tot, pv_tot, onshore_tot, offshore_tot, river_tot, hydro_prod_tot, probability_tot, year_tot = load_all_weather_data(
-            1980, 2019)
+            1980, 2019, imports=False)  # we do not consider imports for now
         weather_tot_params = {
             "demand": demand_centered_tot,
             "sun": pv_tot,

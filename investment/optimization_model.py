@@ -781,6 +781,7 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                     gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, x_cutoff, y_cutoff,
                     add_params, convergence):
     # testing first commit to new branch
+    # test merging branch
     """
 
     Parameters

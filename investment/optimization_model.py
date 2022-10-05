@@ -508,17 +508,24 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
-    expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
+    expectation_coefficient_f_tilde_beta = []
+    for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
+        expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
+        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(expectation_coefficient_f_tilde.shape + (1,))
+        expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
+
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=-1)
+
     investment_costs = add_params[f'investment_costs_{tec}']
     Delta_investment_costs = investment_costs[t] - (1 - nu_deval) * np.exp(-discount_rate) * investment_costs[
         t + 1]  # should be positive
     q_t = 1 / (2 * c_tilde) * (expectation_coefficient_f_tilde - Delta_investment_costs) + (1 - nu_deval) * np.exp(
-        -discount_rate) * expectation_qnext  # shape (d,)*(t+1)
-    assert q_t.ndim == t + 1
+        -discount_rate) * expectation_qnext.reshape(expectation_qnext.shape + (1,))  # shape (d,)*(t+1)
+    assert q_t.ndim == t + 1 + 1  # we add a dimension for beta
     return q_t
 
 
-def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, start, end, gas_scenarios, Q_T_1,
+def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios, Q_T_1,
                           premium, weather_params, weather_tot_params, Q_offshore_T_1, tec, x_cutoff_T_1,
                           y_cutoff_T_1, add_params):
     """NEW VERSION. Finds the value of optimal control final. Q corresponds to investment decisions by other agents at time
@@ -550,7 +557,14 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, s
     #                                         weather_tot_params, Q_offshore_T_1_cvar, tec, x_cutoff_T_1_cvar,
     #                                         y_cutoff_T_1_cvar, add_params)  # shape (d,)*(T)
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
-    expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
+
+    expectation_coefficient_f_tilde_beta = []
+    for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
+        expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
+        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(
+            expectation_coefficient_f_tilde.shape + (1,))
+        expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=-1)
 
     # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
     coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
@@ -569,12 +583,12 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, s
     #         investment_costs[T - 1])  # shape (d,)*T
     # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation
     return 1 / (2 * c_tilde) * (
-            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g -
+            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g.reshape(expectation_coefficient_g.shape + (1,)) -
             investment_costs[T - 1])  # shape (d,)*T
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 
 
-def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, alpha, start, end, gas_scenarios, Q: list,
+def find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios, Q: list,
                          premium, weather_params, weather_tot_params, Q_offshore, tec,
                          x_cutoff: list, y_cutoff: list, add_params):
     """
@@ -604,7 +618,7 @@ def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, alpha, st
         y_cutoff) == T
     # optimal_strategy = np.zeros(Q_sun.shape)
     optimal_strategy = []
-    control_final = optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, alpha, start, end,
+    control_final = optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
                                           gas_scenarios, Q[T - 1], premium[T - 1], weather_params,
                                           weather_tot_params, Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
                                           add_params)  # shape (d,)*T
@@ -612,7 +626,7 @@ def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, alpha, st
     # optimal_strategy[T - 1, :] = control_final
     control_next = control_final
     for t in range(T - 2, -1, -1):
-        control_time_t = recursive_optimal_control(t, control_next, trans_matrix, demand_states, beta, alpha, start,
+        control_time_t = recursive_optimal_control(t, control_next, trans_matrix, demand_states, list_beta, alpha, start,
                                                    end, gas_scenarios, Q[t], premium[t], weather_params,
                                                    weather_tot_params, Q_offshore[t], tec, x_cutoff[t], y_cutoff[t],
                                                    add_params)  # shape (d,)*(t+1)

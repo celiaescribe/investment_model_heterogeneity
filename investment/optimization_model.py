@@ -511,16 +511,16 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
     expectation_coefficient_f_tilde_beta = []
     for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
         expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
-        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(expectation_coefficient_f_tilde.shape + (1,))
+        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape((1,) + expectation_coefficient_f_tilde.shape)
         expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
 
-    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=-1)
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)
 
     investment_costs = add_params[f'investment_costs_{tec}']
     Delta_investment_costs = investment_costs[t] - (1 - nu_deval) * np.exp(-discount_rate) * investment_costs[
         t + 1]  # should be positive
     q_t = 1 / (2 * c_tilde) * (expectation_coefficient_f_tilde - Delta_investment_costs) + (1 - nu_deval) * np.exp(
-        -discount_rate) * expectation_qnext.reshape(expectation_qnext.shape + (1,))  # shape (d,)*(t+1)
+        -discount_rate) * expectation_qnext.reshape((1,) + expectation_qnext.shape)  # shape L,(d,)*(t+1)
     assert q_t.ndim == t + 1 + 1  # we add a dimension for beta
     return q_t
 
@@ -562,9 +562,9 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
     for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
         expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
         expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(
-            expectation_coefficient_f_tilde.shape + (1,))
+            (1,) + expectation_coefficient_f_tilde.shape)
         expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
-    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=-1)
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)
 
     # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
     coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
@@ -583,8 +583,8 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
     #         investment_costs[T - 1])  # shape (d,)*T
     # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation
     return 1 / (2 * c_tilde) * (
-            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g.reshape(expectation_coefficient_g.shape + (1,)) -
-            investment_costs[T - 1])  # shape (d,)*T
+            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g.reshape((1,) + expectation_coefficient_g.shape) -
+            investment_costs[T - 1])  # shape L,(d,)*T
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 
 
@@ -668,6 +668,19 @@ def state_distribution_from_control(control_sun, control_wind, add_params):
     return state_distribution
 
 
+def average_state_distribution_beta(state_distribution, list_weight_beta):
+    """Calculates the average state over the whole beta distribution."""
+    new_state_distribution = []
+    T = len(state_distribution)
+    for t in range(1, T, 1):
+        state_sun_t = state_distribution[t][0]
+        state_wind_t = state_distribution[t][1]
+        average_state_sun_t = (state_sun_t * list_weight_beta.reshape(state_sun_t.shape)).sum(0)  # we average over beta
+        average_state_wind_t = (state_wind_t * list_weight_beta.reshape(state_sun_t.shape)).sum(0)  # we average over beta
+        new_state_distribution.append(np.array(average_state_sun_t, average_state_wind_t))
+    return new_state_distribution
+
+
 def control_from_state(state_distribution, add_params):
     """Returns control distribution for sun and wind from the state distribution.
     Returns two lists of length T, where element t is an array of shape (d)*(t+1)"""
@@ -703,7 +716,7 @@ def decouple_state_distribution(state_distribution):
 
 
 def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t, demand_states, proba_time_t,
-                trans_matrix, beta, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
+                trans_matrix, list_beta, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                 Q_offshore_t, tec, x_cutoff_t, y_cutoff_t, add_params):
     """Returns expected cost at time t specified for each possible uncertainty path"""
     assert opt_control_t.ndim == state_distribution_t.ndim == other_state_distribution_t.ndim - 1 == t + 1
@@ -736,18 +749,21 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
     #                                         Q_offshore_t_cvar, tec, x_cutoff_t_cvar, y_cutoff_t_cvar,
     #                                         add_params)  # shape (d,)*(t+1)
     assert state_distribution_t.shape == cvar_coefficient_f.shape == proba_time_t.shape
-    cvar_cost = -(1 - beta) * np.exp(-discount_rate * t) * (
-            state_distribution_t * cvar_coefficient_f * proba_time_t)  # shape (d,)*(t+1)
-    investment_cost = np.exp(-discount_rate * t) * (
-            investment_costs[t] * opt_control_t + c_tilde * opt_control_t ** 2) * proba_time_t  # shape (d,)*(t+1)
-    expected_cost = - beta * np.exp(-discount_rate * t) * (state_distribution_t.reshape(
-        state_distribution_t.shape + (1,)) * coef_f * proba_time_t_next)  # shape (d,)*(t+2)
+    list_cost_beta = []
+    for beta in list_beta:
+        cvar_cost = -(1 - beta) * np.exp(-discount_rate * t) * (
+                state_distribution_t * cvar_coefficient_f * proba_time_t)  # shape (d,)*(t+1)
+        investment_cost = np.exp(-discount_rate * t) * (
+                investment_costs[t] * opt_control_t + c_tilde * opt_control_t ** 2) * proba_time_t  # shape (d,)*(t+1)
+        expected_cost = - beta * np.exp(-discount_rate * t) * (state_distribution_t.reshape(
+            state_distribution_t.shape + (1,)) * coef_f * proba_time_t_next)  # shape (d,)*(t+2)
 
-    cost = cvar_cost.sum() + investment_cost.sum() + expected_cost.sum()  # float
-    return cost, proba_time_t_next
+        cost = cvar_cost.sum() + investment_cost.sum() + expected_cost.sum()  # float
+        list_cost_beta.append(cost)
+    return list_cost_beta, proba_time_t_next
 
 
-def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, beta,
+def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, list_beta,
                 alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
                 x_cutoff: list, y_cutoff: list, add_params):
     """Returns total player's cost for a given strategy and corresponding state distribution"""
@@ -755,6 +771,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
     assert len(opt_control) == len(state_distribution) == len(other_state_distribution) == trans_matrix.shape[0] == T
     proba_time_t = np.array([0, 1, 0])  # we initialize the probability by stating that we are at state 1 when t=-1
     total_cost = 0
+    list_total_cost_beta = []
     for t in range(0, T, 1):
         opt_control_t = opt_control[t]
         if tec == 'sun':
@@ -763,13 +780,14 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
             state_distribution_t = state_distribution[t][1]
         other_state_distribution_t = other_state_distribution[t]
         assert proba_time_t.ndim == t + 1
-        cost_t, proba_time_t_next = cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t,
+        list_cost_beta_t, proba_time_t_next = cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t,
                                                 demand_states, proba_time_t,
-                                                trans_matrix, beta, alpha, start, end, gas_scenarios, premium[t],
+                                                trans_matrix, list_beta, alpha, start, end, gas_scenarios, premium[t],
                                                 weather_params,
                                                 weather_tot_params, Q_offshore[t], tec, x_cutoff[t], y_cutoff[t],
                                                 add_params)
-        total_cost = total_cost + cost_t
+        list_total_cost_beta = [total_cost + cost_t for (total_cost, cost_t) in zip(list_total_cost_beta, list_cost_beta_t)]  # TODO: il y a peut-être un problème ici
+        # total_cost = total_cost + cost_t
         proba_time_t = proba_time_t_next  # shape (d,)*(t+2)
     D_average_T = demand_states[T - 1, :]
     Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
@@ -792,7 +810,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
     return total_cost
 
 
-def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, beta, alpha, start, end,
+def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, list_beta, list_weight_beta, alpha, start, end,
                     gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, x_cutoff, y_cutoff,
                     add_params, convergence):
 
@@ -826,16 +844,17 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
 
         # Finding optimal control
         TIKTOK.interval("optimal_control", display=False)
-        opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, alpha, start, end,
+        opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
                                                gas_scenarios, state_distribution, premium, weather_params,
                                                weather_tot_params, Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
-        opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, alpha, start, end,
+        opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
                                                 gas_scenarios, state_distribution, premium, weather_params,
                                                 weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
         # Finding associated state distribution
-        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)
+        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # includes the different beta
+        new_average_state_distribution = average_state_distribution_beta(new_state_distribution, list_weight_beta)
 
         if n % 20 == 0:
             TIKTOK.interval("optimal_control", display=True)

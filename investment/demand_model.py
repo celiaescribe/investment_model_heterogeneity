@@ -67,6 +67,34 @@ def demand_model_no_uncertainty():
     return trans_matrix, demand_states
 
 
+def demand_model_no_uncertainty_flat():
+    """Demand model where we only stay on average trajectory, and we get rid of the 3x3 matrix"""
+    trans_matrix_2025 = [[1]]
+    trans_matrix_2030 = param_trans_matrix(alpha1=0, alpha2=0, gamma1=0, gamma2=0)
+    trans_matrix_2035 = trans_matrix_2030
+    trans_matrix_2040 = trans_matrix_2030
+    trans_matrix_2045 = trans_matrix_2030
+
+    trans_matrix = np.array([trans_matrix_2025, trans_matrix_2030, trans_matrix_2035, trans_matrix_2040,
+                             trans_matrix_2045])
+
+    # Only average values
+    states_2025 = [58.1]
+    states_2030 = [62]
+    states_2035 = [65.9]
+    states_2040 = [ 69.8]
+    states_2045 = [73.7]
+
+    demand_states = np.array([states_2025,
+                              states_2030,
+                              states_2035,
+                              states_2040,
+                              states_2045])
+
+    # trans_matrix = [trans_matrix_2025, trans_matrix_2030, trans_matrix_2035, trans_matrix_2040, trans_matrix_2045]
+    return trans_matrix, demand_states
+
+
 def demand_model_param(alpha1, alpha2, gamma1, gamma2):
     trans_matrix_2025 = [[gamma1, 1 - gamma1 - gamma2, gamma2],
                          [gamma1, 1 - gamma1 - gamma2, gamma2],

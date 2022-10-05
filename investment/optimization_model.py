@@ -457,7 +457,7 @@ def index_cvar(trans_matrix):
     return (trans_matrix != 0).argmax(axis=1)
 
 
-def recursive_optimal_control(t, q_next, trans_matrix, demand_states, beta, alpha, start, end, gas_scenarios,
+def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios,
                               Q_t: np.ndarray, premium, weather_params, weather_tot_params,
                               Q_offshore_t, tec, x_cutoff_t, y_cutoff_t, add_params):
     """ NEW VERSION WITH UNCERTAINTY ON GAS. Returns optimal control at time t, of shape (d,)*(t+1)
@@ -507,6 +507,7 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, beta, alph
     #                                         y_cutoff_t_cvar, add_params)  # shape (d,)*(t+1)
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
+
     expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
     investment_costs = add_params[f'investment_costs_{tec}']
     Delta_investment_costs = investment_costs[t] - (1 - nu_deval) * np.exp(-discount_rate) * investment_costs[

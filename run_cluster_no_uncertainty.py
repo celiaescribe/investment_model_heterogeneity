@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 import argparse
+from scipy.stats import binom
 
 parser = argparse.ArgumentParser(description='Run investment model.')
 parser.add_argument("-d", "--discount", type=float, help="discount rate")
@@ -34,13 +35,41 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 # discount_rate_yearly, beta, nu_deval, availnuc, cvar_level, N = 0.04, 1, 0.15, 1, 0.05, 20
 
 
-list_beta = [0.2, 0.4, 0.6, 0.8, 1.0]
+# list_beta = [0.2, 0.4, 0.6, 0.8, 1.0]
 list_avail_nuc = [0.8, 0.9]
+list_beta = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-for beta in list_beta:
+list_weight_beta_uniform = [1 / len(list_beta) for i in range(len(list_beta))]
+list_weight_beta_normal = [0.01, 0.01, 0.03, 0.1, 0.2, 0.3, 0.2, 0.1, 0.03, 0.01, 0.01]
+
+n, p = 10, 0.6
+r_values = list(range(n + 1))
+pmf_values = [binom.pmf(r, n, p) for r in r_values]
+list_weight_beta_binom_06 = pmf_values  # this corresponds to a binomial distribution which I rescaled
+
+n, p = 10, 0.6
+r_values = list(range(n + 1))
+pmf_values = [binom.pmf(r, n, p) for r in r_values]
+list_weight_beta_binom_04 = pmf_values  # this corresponds to a binomial distribution which I rescaled
+
+weights = {
+    'uniform': list_weight_beta_uniform,
+    'binom_06': list_weight_beta_binom_06,
+    'binom_04': list_weight_beta_binom_04,
+    'normal': list_weight_beta_normal
+}
+
+# First test: we only try one value for beta
+list_beta = [0.6]
+weights = {
+    'singleton': [1]
+}
+
+for weight in list(weights.keys()):
+    list_weight_beta = weights[weight]
     for availnuc in list_avail_nuc:
         print(
-            f"Model with beta {beta}, discount {discount_rate_yearly}, nu {nu_deval}, nuclear {availnuc}, cvar {cvar_level}, premium {premium_value}, market cap {market_cap}",
+            f"Model with weights {weight}, discount {discount_rate_yearly}, nu {nu_deval}, nuclear {availnuc}, cvar {cvar_level}, premium {premium_value}, market cap {market_cap}",
             flush=True)
         # Create directory if does not exists
         day = datetime.now().strftime("%m%d")
@@ -129,11 +158,13 @@ for beta in list_beta:
             strategy_init.append(strategy_t)
 
         # Run algorithm
-        state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T, Tprime=Tprime,
+        state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T,
+                                                                                 Tprime=Tprime,
                                                                                  state_init=strategy_init,
                                                                                  trans_matrix=trans_matrix,
                                                                                  demand_states=demand_states,
-                                                                                 beta=beta,
+                                                                                 list_beta=list_beta,
+                                                                                 list_weight_beta=list_weight_beta,
                                                                                  alpha=cvar_level,
                                                                                  start=1980,
                                                                                  end=2019,
@@ -148,7 +179,7 @@ for beta in list_beta:
                                                                                  convergence="wolfe")
 
         # Process output
-        subdirectory_name = directory_name + f"/beta{beta}_discount{discount_rate_yearly}_nu{nu_deval}_premium{premium_value}_availnuc{availnuc}_cvar{cvar_level}_cap{market_cap}"
+        subdirectory_name = directory_name + f"/weight{weight}_discount{discount_rate_yearly}_nu{nu_deval}_premium{premium_value}_availnuc{availnuc}_cvar{cvar_level}_cap{market_cap}"
         subdirectory_name = subdirectory_name.replace(".", "p")  # replace all points in file by p to avoid problems
         subdirectory_name = subdirectory_name.replace("-",
                                                       "m")  # replace all minus in file by symbol m to avoid problems

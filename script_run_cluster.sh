@@ -16,4 +16,4 @@
 module load anaconda3/2020.11 #cuda/10.2
 
 ## execution
-python run_cluster.py -d 0.04 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 120 -dir "beta_no_demand_uncertainty"
+python run_cluster_no_uncertainty.py -d 0.04 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 120 -dir "singlebeta_no_demand_uncertainty"

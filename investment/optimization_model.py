@@ -611,11 +611,12 @@ def average_state_distribution_beta(state_distribution, list_weight_beta):
     """
     new_state_distribution = []
     T = len(state_distribution)
-    for t in range(1, T, 1):
+    array_weight_beta = np.array(list_weight_beta)
+    for t in range(0, T, 1):
         state_sun_t = state_distribution[t][0]
         state_wind_t = state_distribution[t][1]
-        average_state_sun_t = (state_sun_t * list_weight_beta.reshape(state_sun_t.shape)).sum(0)  # we average over beta
-        average_state_wind_t = (state_wind_t * list_weight_beta.reshape(state_sun_t.shape)).sum(0)  # we average over beta
+        average_state_sun_t = (state_sun_t * array_weight_beta.reshape(array_weight_beta.shape + (1,)*(t+1))).sum(0)  # we average over beta
+        average_state_wind_t = (state_wind_t * array_weight_beta.reshape(array_weight_beta.shape + (1,)*(t+1))).sum(0)  # we average over beta
         new_state_distribution.append(np.array([average_state_sun_t, average_state_wind_t]))
     return new_state_distribution
 
@@ -688,7 +689,7 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
     assert state_distribution_t[0,...].shape == cvar_coefficient_f.shape == proba_time_t.shape  # we need to remove first dimension associated with beta in the state distribution
 
     list_cost_beta = []
-    for i in range(list_beta):  # here, we pay attention to selecting only state and control associated with given beta
+    for i in range(len(list_beta)):  # here, we pay attention to selecting only state and control associated with given beta
         cvar_cost_beta = -(1 - list_beta[i]) * np.exp(-discount_rate * t) * (
                 state_distribution_t[i, ...] * cvar_coefficient_f * proba_time_t)  # shape (d,)*(t+1)
         investment_cost_beta = np.exp(-discount_rate * t) * (
@@ -711,7 +712,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
     assert len(opt_control) == len(state_distribution) == len(other_state_distribution) == trans_matrix.shape[0] == T
     proba_time_t = np.array([0, 1, 0])  # we initialize the probability by stating that we are at state 1 when t=-1
     total_cost = 0
-    list_total_cost_beta = [0 for i in range(list_beta)]  # initialize costs to zero
+    list_total_cost_beta = [0 for i in range(len(list_beta))]  # initialize costs to zero
     for t in range(0, T, 1):
         opt_control_t = opt_control[t]
         if tec == 'sun':
@@ -729,7 +730,8 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
         proba_time_t = proba_time_t_next  # shape (d,)*(t+2)
     D_average_T = demand_states[T - 1, :]
     # Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
-    Q_T = other_state_distribution[T - 1]  # TODO: attention, j'ai changé cela pour arrêter la dévaluation, il pourrait y avoir une erreur
+    Q_T = other_state_distribution[T - 1]
+    # TODO: attention, j'ai changé cela pour arrêter la dévaluation, il pourrait y avoir une erreur
     coef_g = concatenate_coef_g_no_deval(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
                                 Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
                                 add_params)  # shape (d,)*(T+1)
@@ -744,19 +746,19 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
     #                      state_distribution[T - 1][1].shape + (1,)) * coef_g  # shape (d,)*(T+1)
     list_final_cost_beta = []
     if tec == 'sun':  # TODO: pareil, j'ai changé pour enlever la dévaluation de coef_g, il pourrait y avoir des bugs
-        for i in range(list_beta):
+        for i in range(len(list_beta)):
             cost_final_beta = np.exp(-discount_rate * T) * \
-                         (state_distribution[T - 1][0][i,...]).reshape(
-                             state_distribution[T - 1][0][i,...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
+                         (state_distribution[T - 1][0][i, ...]).reshape(
+                             state_distribution[T - 1][0][i, ...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
             assert cost_final_beta.shape == proba_time_t.shape
             cost_final_beta_with_proba = cost_final_beta * proba_time_t
             cost_T_beta = cost_final_beta_with_proba.sum()
             list_final_cost_beta.append(cost_T_beta)
     else:
-        for i in range(list_beta):
+        for i in range(len(list_beta)):
             cost_final_beta = np.exp(-discount_rate * T) * \
-                         (state_distribution[T - 1][1][i,...]).reshape(
-                             state_distribution[T - 1][1][i,...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
+                         (state_distribution[T - 1][1][i, ...]).reshape(
+                             state_distribution[T - 1][1][i, ...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
             assert cost_final_beta.shape == proba_time_t.shape
             cost_final_beta_with_proba = cost_final_beta * proba_time_t
             cost_T_beta = cost_final_beta_with_proba.sum()

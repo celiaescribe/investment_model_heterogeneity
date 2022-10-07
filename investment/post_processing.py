@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.express as px
 
 
-def process_output(T, state_distribution, objective_gap, index_objective_gap, subdirectory_name, add_params):
+def process_output(T, state_distribution, objective_gap, index_objective_gap, list_beta, list_weight_beta, subdirectory_name, add_params):
     """Save output"""
     # Process output
     control_sun, control_wind = control_from_state(state_distribution, add_params)
@@ -29,14 +29,19 @@ def process_output(T, state_distribution, objective_gap, index_objective_gap, su
             control_by_time[f't{t}'] = control[cluster][t]
         control[cluster] = control_by_time
 
-    # Save output to file
+    # Save control values to file
     filename_hour = datetime.now().strftime("%H-%M-%S")
     for cluster in list_cluster:
         path = subdirectory_name + f"/{filename_hour}_control_{cluster}.npz"
         np.savez(path, **control[cluster])
 
+    # Save objective values to file
     np.savez(subdirectory_name + f"/{filename_hour}_objective.npz",
              **{'objective': objective_gap, 'index': index_objective_gap})
+
+    # Save beta discretization to file
+    np.savez(subdirectory_name + f"/{filename_hour}_beta_discretization.npz",
+             **{'list_beta': list_beta, 'list_weight_beta': list_weight_beta})
 
     # save json config
     with open(Path(subdirectory_name) / f'{filename_hour}_additional_parameters.json', 'a') as fp:

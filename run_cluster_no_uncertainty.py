@@ -47,15 +47,15 @@ r_values = list(range(n + 1))
 pmf_values = [binom.pmf(r, n, p) for r in r_values]
 list_weight_beta_binom_06 = pmf_values  # this corresponds to a binomial distribution which I rescaled
 
-n, p = 10, 0.6
+n, p = 10, 0.4
 r_values = list(range(n + 1))
 pmf_values = [binom.pmf(r, n, p) for r in r_values]
 list_weight_beta_binom_04 = pmf_values  # this corresponds to a binomial distribution which I rescaled
 
 weights = {
     'uniform': list_weight_beta_uniform,
-    'binom_06': list_weight_beta_binom_06,
-    'binom_04': list_weight_beta_binom_04,
+    'binom06': list_weight_beta_binom_06,
+    'binom04': list_weight_beta_binom_04,
     'normal': list_weight_beta_normal
 }
 

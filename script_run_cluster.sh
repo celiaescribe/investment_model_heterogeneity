@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ## BEGIN SBATCH directives
-#SBATCH --job-name=risk_aversion
-#SBATCH --output="outputs_script/risk_aversion.txt"
-#SBATCH --error="outputs_script/error_risk_aversion.txt"
+#SBATCH --job-name=heterogeneity_no_demand
+#SBATCH --output="outputs_script/heterogeneity_no_demand.txt"
+#SBATCH --error="outputs_script/error_heterogeneity_no_demand.txt"
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --time=100:00:00
@@ -16,4 +16,4 @@
 module load anaconda3/2020.11 #cuda/10.2
 
 ## execution
-python run_cluster_no_uncertainty.py -d 0.04 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 120 -dir "singlebeta_no_demand_uncertainty"
+python run_cluster_heterogeneity.py -d 0.04 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 120 -dir "beta_heterogeneity_no_demand_uncertainty"

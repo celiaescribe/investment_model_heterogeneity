@@ -14,6 +14,167 @@ def process_data_capa_vom(data_capacity_and_vom, GJ_MWh):
     return dispatchable_prod
 
 
+def data_process_homemade(period, avail_nuclear=1, imports=False, flex="low"):
+    """Function similar to data_process_with_scenarios but where I change in a very simple manner the capacities
+    to obtain more high prices due to gas and imports.
+    IN PROGRESS"""
+    #TODO: les valeurs choisies ici devraient être modifiées pour avoir un "vrai" sens...
+    assert period in ["short", "large"], f"Parameter period should belong to {['short', 'large']}, instead {period}"
+    if period == "short":
+        if imports:
+            assert flex in ["low", "high", "average"]
+            subdir_jointlaw = f"inputs/joint_law_imports_{flex}/joint_law_2015_2019.csv"
+        else:
+            subdir_jointlaw = f"inputs/joint_law/joint_law_2015_2019.csv"
+    else:  # "large"
+        if imports:
+            assert flex in ["low", "high", "average"]
+            subdir_jointlaw = f"inputs/joint_law_imports_{flex}/joint_law_tot.csv"
+        else:
+            subdir_jointlaw = f"inputs/joint_law/joint_law_tot.csv"
+    joint_law = pd.read_csv(subdir_jointlaw, index_col=0)
+
+    # Sobriety scenario
+    data_capacity_and_vom_2025_sob = [['nuclear', 33.13 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['coal_1G', 3, 2, 0.35, 3.3],
+                                      ['flex', 23, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt1G', 6.1, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 9.5, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 7.5, 5.6, 0.58, 1.6],
+                                      ['gas_ocgtSA', 1.03, 5.6, 0.42, 1.6],
+                                      ['oil_light', 3, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2030_sob = [['nuclear', 59.4 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['gas_ccgt1G', 3.1 - 0.30, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 3.5 - 0.30, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 4.5 - 0.30, 5.6, 0.58, 1.6],
+                                      ['gas_ocgtSA', 1.03 - 0.30, 5.6, 0.42, 1.6],
+                                      ['oil_light', 1, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2035_sob = [['nuclear', 54 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['gas_ccgt1G', 3.1 - 0.30 - 1, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 3.5 - 0.30 - 1, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 4.5 - 0.30 - 1, 5.6, 0.58, 1.6],
+                                      ['oil_light', 1, 12.9, 0.35, 1.1]]  # coal disappears after 2035
+    data_capacity_and_vom_2040_sob = [['nuclear', 49.7 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['gas_ccgt2G', 3.5 - 3.5, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 4.5 - 3.1, 5.6, 0.58, 1.6]
+                                      ]
+    data_capacity_and_vom_2045_sob = [['nuclear', 42 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['gas_ccgtSA', 1, 5.6, 0.58, 1.6],
+                                      ['gas_renewable', 1, 22, 1, 0],
+                                      # we choose values for renewable gas so that final price is 80EUR/MWh
+                                      ]
+    Q_offshore_sob = [0, 5.2, 12, 19.1, 25]
+
+
+    # Reference scenario  # TODO: attention, je modifie tout ici pour mettre des valeurs un peu aléatoires
+    data_capacity_and_vom_2025_ref = [['nuclear', 33.13 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['coal_1G', 3, 2, 0.35, 3.3],
+                                      ['flex', 23, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt1G', 6.1, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 6.5, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 7.5, 5.6, 0.58, 1.6],
+                                      ['gas_ocgtSA', 1.03, 5.6, 0.42, 1.6],
+                                      ['oil_light', 3, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2030_ref = [['nuclear', 29.4 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['flex', 26, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt1G', 5.1 - 0.15, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 5.5 - 0.15, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 6.5 - 0.15, 5.6, 0.58, 1.6],
+                                      ['gas_ocgtSA', 1.03 - 0.15, 5.6, 0.42, 1.6],
+                                      ['oil_light', 1, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2035_ref = [['nuclear', 24 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['flex', 30, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt1G', 4.1 - 0.15 - 0.8, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 4.5 - 0.15 - 0.8, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 5.5 - 0.15 - 0.8, 5.6, 0.58, 1.6],
+                                      ['gas_ocgtSA', 1.03 - 0.15 - 0.8, 5.6, 0.42, 1.6],
+                                      ['oil_light', 1, 12.9, 0.35, 1.1]]  # coal disappears after 2035
+    data_capacity_and_vom_2040_ref = [['nuclear', 19.7 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['flex', 33, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt1G', 3.1 - 0.15 - 1.9, 5.6, 0.4, 1.6],
+                                      ['gas_ccgt2G', 3.5 - 0.15 - 1.9, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 4.5 - 0.15 - 1.9, 5.6, 0.58, 1.6],
+                                      ['gas_renewable', 1.6, 22, 1, 0]]
+    data_capacity_and_vom_2045_ref = [['nuclear', 12 * avail_nuclear, 0.47, 0.33, 9],
+                                      ['flex', 36, 4.5, 0.4, 1.6],  # we add a step with flexibility
+                                      ['gas_ccgt2G', 3.5 - 0.15 - 2.1 - 1, 5.6, 0.48, 1.6],
+                                      ['gas_ccgtSA', 4.5 - 0.15 - 2.1 - 1, 5.6, 0.58, 1.6],
+                                      ['gas_renewable', 6.4, 22, 1, 0]]
+    Q_offshore_ref = [0, 5.2, 12, 20.9, 30]
+
+    # Reindustrialisation scenario
+    data_capacity_and_vom_2025_high = [['nuclear', 63.13 * avail_nuclear, 0.47, 0.33, 9],
+                                       ['coal_1G', 3, 2, 0.35, 3.3],
+                                       ['gas_ccgt1G', 3.1, 5.6, 0.4, 1.6],
+                                       ['gas_ccgt2G', 3.5, 5.6, 0.48, 1.6],
+                                       ['gas_ccgtSA', 4.5, 5.6, 0.58, 1.6],
+                                       ['gas_ocgtSA', 1.03, 5.6, 0.42, 1.6],
+                                       ['oil_light', 3, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2030_high = [['nuclear', 59.4 * avail_nuclear, 0.47, 0.33, 9],
+                                       ['gas_ccgt1G', 3.1 - 0.15, 5.6, 0.4, 1.6],
+                                       ['gas_ccgt2G', 3.5 - 0.15, 5.6, 0.48, 1.6],
+                                       ['gas_ccgtSA', 4.5 - 0.15, 5.6, 0.58, 1.6],
+                                       ['gas_ocgtSA', 1.03 - 0.15, 5.6, 0.42, 1.6],
+                                       ['oil_light', 1, 12.9, 0.35, 1.1]]
+    data_capacity_and_vom_2035_high = [['nuclear', 54 * avail_nuclear, 0.47, 0.33, 9],
+                                       ['gas_ccgt1G', 3.1 - 0.15 - 0.8, 5.6, 0.4, 1.6],
+                                       ['gas_ccgt2G', 3.5 - 0.15 - 0.8, 5.6, 0.48, 1.6],
+                                       ['gas_ccgtSA', 4.5 - 0.15 - 0.8, 5.6, 0.58, 1.6],
+                                       ['gas_ocgtSA', 1.03 - 0.15 - 0.8, 5.6, 0.42, 1.6],
+                                       ['oil_light', 1, 12.9, 0.35, 1.1]]  # coal disappears after 2035
+    data_capacity_and_vom_2040_high = [['nuclear', 49.7 * avail_nuclear, 0.47, 0.33, 9],
+                                       ['gas_ccgt1G', 3.1 - 0.15 - 1.9, 5.6, 0.4, 1.6],
+                                       ['gas_ccgt2G', 3.5 - 0.15 - 1.9, 5.6, 0.48, 1.6],
+                                       ['gas_ccgtSA', 4.5 - 0.15 - 1.9, 5.6, 0.58, 1.6],
+                                       ['gas_renewable', 1.6, 22, 1, 0]
+                                       ]
+    data_capacity_and_vom_2045_high = [['nuclear', 42 * avail_nuclear, 0.47, 0.33, 9],
+                                       ['gas_ccgt2G', 3.5 - 0.15 - 2.1 - 1, 5.6, 0.48, 1.6],
+                                       ['gas_ccgtSA', 4.5 - 0.15 - 2.1 - 1, 5.6, 0.58, 1.6],
+                                       ['gas_renewable', 9.7, 22, 1, 0]
+                                       ]
+    Q_offshore_high = [0, 5, 20, 33.1, 48]
+
+    data_capacity_and_vom_sob = {
+        '2025': data_capacity_and_vom_2025_sob,
+        '2030': data_capacity_and_vom_2030_sob,
+        '2035': data_capacity_and_vom_2035_sob,
+        '2040': data_capacity_and_vom_2040_sob,
+        '2045': data_capacity_and_vom_2045_sob,
+    }
+
+    data_capacity_and_vom_ref = {
+        '2025': data_capacity_and_vom_2025_ref,
+        '2030': data_capacity_and_vom_2030_ref,
+        '2035': data_capacity_and_vom_2035_ref,
+        '2040': data_capacity_and_vom_2040_ref,
+        '2045': data_capacity_and_vom_2045_ref,
+    }
+
+    data_capacity_and_vom_high = {
+        '2025': data_capacity_and_vom_2025_high,
+        '2030': data_capacity_and_vom_2030_high,
+        '2035': data_capacity_and_vom_2035_high,
+        '2040': data_capacity_and_vom_2040_high,
+        '2045': data_capacity_and_vom_2045_high,
+    }
+
+    data_capacity_and_vom = {
+        'sob': data_capacity_and_vom_sob,
+        'ref': data_capacity_and_vom_ref,
+        'high': data_capacity_and_vom_high
+    }
+
+    Q_offshore_dict = {
+        'sob': Q_offshore_sob,
+        'ref': Q_offshore_ref,
+        'high': Q_offshore_high
+    }
+
+    x_cutoff, y_cutoff, Q_offshore = prepare_cutoff(data_capacity_and_vom, Q_offshore_dict)
+    return joint_law, x_cutoff, y_cutoff, Q_offshore
+
+
 def data_process_with_scenarios(period, avail_nuclear, imports=False, flex="low"):
     """
     Function which returns the cutoff points, joint law, and values for offshore. This is the latest version of the
@@ -170,6 +331,11 @@ def data_process_with_scenarios(period, avail_nuclear, imports=False, flex="low"
         'high': Q_offshore_high
     }
 
+    x_cutoff, y_cutoff, Q_offshore = prepare_cutoff(data_capacity_and_vom, Q_offshore_dict)
+    return joint_law, x_cutoff, y_cutoff, Q_offshore
+
+
+def prepare_cutoff(data_capacity_and_vom, Q_offshore_dict):
     GJ_MWh = 3.6  # conversion factor
     x_cutoff = []
     y_cutoff = []
@@ -198,7 +364,7 @@ def data_process_with_scenarios(period, avail_nuclear, imports=False, flex="low"
         y_cutoff.append(y_cutoff_year)
         Q_offshore.append(Q_offshore_year)
         t += 1  # update the cursor indicating the considered year
-    return joint_law, x_cutoff, y_cutoff, Q_offshore
+    return x_cutoff, y_cutoff, Q_offshore
 
 
 def load_all_weather_data(start, end, imports=False, flex="low"):

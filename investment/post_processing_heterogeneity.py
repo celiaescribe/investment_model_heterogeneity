@@ -10,9 +10,7 @@ from investment.post_processing import filter_dirs
 from datetime import datetime
 from pathlib import Path
 import os
-import seaborn as sns
 import pandas as pd
-import plotly.express as px
 
 
 def load_results_heterogeneity(path):

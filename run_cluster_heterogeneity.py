@@ -40,7 +40,17 @@ list_avail_nuc = [0.8, 0.9]
 list_beta = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 list_weight_beta_uniform = [1 / len(list_beta) for i in range(len(list_beta))]
-list_weight_beta_normal = [0.01, 0.01, 0.03, 0.1, 0.2, 0.3, 0.2, 0.1, 0.03, 0.01, 0.01]
+list_weight_beta_home1 = [0.01, 0.01, 0.03, 0.1, 0.2, 0.3, 0.2, 0.1, 0.03, 0.01, 0.01]
+list_weight_beta_home2 = [0, 0.01, 0.08, 0.14, 0.17, 0.2, 0.17, 0.14, 0.08, 0.01, 0]
+list_weight_beta_home3 = [0.06, 0.08, 0.09, 0.1, 0.11, 0.12, 0.11, 0.1, 0.09, 0.08, 0.06]
+
+list_weight_beta_singleton05 = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+list_weight_beta_singleton08 = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]
+
+n, p = 10, 0.8
+r_values = list(range(n + 1))
+pmf_values = [binom.pmf(r, n, p) for r in r_values]
+list_weight_beta_binom_08 = pmf_values  # this corresponds to a binomial distribution which I rescaled
 
 n, p = 10, 0.6
 r_values = list(range(n + 1))
@@ -54,16 +64,21 @@ list_weight_beta_binom_04 = pmf_values  # this corresponds to a binomial distrib
 
 weights = {
     'uniform': list_weight_beta_uniform,
+    'binom08': list_weight_beta_binom_08,
     'binom06': list_weight_beta_binom_06,
     'binom04': list_weight_beta_binom_04,
-    'normal': list_weight_beta_normal
+    'home1': list_weight_beta_home1,
+    'home2': list_weight_beta_home2,
+    'home3': list_weight_beta_home3,
+    'singleton05': list_weight_beta_singleton05,
+    'singleton08': list_weight_beta_singleton08
 }
 
 # First test: we only try one value for beta
-list_beta = [0.6]
-weights = {
-    'singleton': [1]
-}
+# list_beta = [0.6]
+# weights = {
+#     'singleton': [1]
+# }
 
 for weight in list(weights.keys()):
     list_weight_beta = weights[weight]
@@ -185,5 +200,5 @@ for weight in list(weights.keys()):
                                                       "m")  # replace all minus in file by symbol m to avoid problems
         Path(subdirectory_name).mkdir(parents=True, exist_ok=True)
 
-        process_output(T, state_distribution, objective_gap, index_objective_gap, subdirectory_name,
-                       additional_parameters)
+        process_output(T, state_distribution, objective_gap, index_objective_gap, list_beta, list_weight_beta,
+                       subdirectory_name, additional_parameters)

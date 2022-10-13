@@ -396,7 +396,7 @@ def index_cvar(trans_matrix):
     return (trans_matrix != 0).argmax(axis=1)
 
 
-def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios,
+def recursive_optimal_control(t, q_next, trans_matrix, demand_states, beta, list_gamma, alpha, start, end, gas_scenarios,
                               Q_t: np.ndarray, premium, weather_params, weather_tot_params,
                               Q_offshore_t, tec, x_cutoff_t, y_cutoff_t, add_params):
     """ NEW VERSION WITH UNCERTAINTY ON GAS. Returns optimal control at time t, of shape (d,)*(t+1)
@@ -444,13 +444,13 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
-    expectation_coefficient_f_tilde_beta = []
-    for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
-        expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
-        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape((1,) + expectation_coefficient_f_tilde.shape)  # we add a first dimension corresponding to parameter beta
-        expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
+    expectation_coefficient_f_tilde_gamma = []
+    for gamma in list_gamma:
+        expectation_coefficient_f_tilde = gamma * (beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f)
+        expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape((1,) + expectation_coefficient_f_tilde.shape)  # we add a first dimension corresponding to parameter gamma
+        expectation_coefficient_f_tilde_gamma.append(expectation_coefficient_f_tilde)
 
-    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)  # concatenate along first axis
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_gamma, axis=0)  # concatenate along first axis
 
     investment_costs = add_params[f'investment_costs_{tec}']
     Delta_investment_costs = investment_costs[t] - (1 - nu_deval) * np.exp(-discount_rate) * investment_costs[
@@ -461,7 +461,7 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, list_beta,
     return q_t
 
 
-def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios, Q_T_1,
+def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end, gas_scenarios, Q_T_1,
                           premium, weather_params, weather_tot_params, Q_offshore_T_1, tec, x_cutoff_T_1,
                           y_cutoff_T_1, add_params):
     """NEW VERSION. Finds the value of optimal control final. Q corresponds to investment decisions by other agents at time
@@ -490,24 +490,28 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
-    expectation_coefficient_f_tilde_beta = []
-    for beta in list_beta:  # we calculate expectation_coefficient_f_tilde for all beta values
-        expectation_coefficient_f_tilde = beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f
+    expectation_coefficient_f_tilde_gamma = []
+    coef_g_values_gamma = []
+    for gamma in list_gamma:  # we calculate expectation_coefficient_f_tilde for all beta values
+        expectation_coefficient_f_tilde = gamma * (beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f)
         expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(
             (1,) + expectation_coefficient_f_tilde.shape)
-        expectation_coefficient_f_tilde_beta.append(expectation_coefficient_f_tilde)
-    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_beta, axis=0)
+        expectation_coefficient_f_tilde_gamma.append(expectation_coefficient_f_tilde)
 
-    # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
-    coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
-                                       Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
-    # coef_g_values = concatenate_coef_g(T, Tprime, Q_T_1 * (1 - nu_deval), D_average_T_1, premium, weather_params,
-    #                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+        # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
+        coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
+                                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+        coef_g_values = gamma * coef_g_values
+        coef_g_values = coef_g_values.reshape((1,) + coef_g_values.shape)
+        coef_g_values_gamma.append(coef_g_values)
 
-    assert coef_g_values.ndim == T + 1
+    expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_gamma, axis=0)
+    coef_g_values = np.concatenate(coef_g_values_gamma, axis=0)
+
+    assert coef_g_values.ndim == T + 1 + 1  # we added a dimension for the gamma
     # We devaluate one time Q for coef_g_values, as the investment decision was taken at time T-1, and so they have
     # already been devaluated once
-    expectation_coefficient_g = (trans_matrix_T_1 * coef_g_values).sum(-1)  # shape (d,)*T
+    expectation_coefficient_g = (trans_matrix_T_1 * coef_g_values).sum(-1)  # shape (L,) + (d,)*T
 
     investment_costs = add_params[f'investment_costs_{tec}']
     # return 1 / (2 * c_tilde) * (
@@ -515,7 +519,7 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alp
     #         investment_costs[T - 1])  # shape (d,)*T
     # TODO: attention, pareil, je teste quelque chose en enlevant la dévaluation, et je reshape expectation_coefficient_g car il ne prend pas en compte d'aversion au risque
     return 1 / (2 * c_tilde) * (
-            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g.reshape((1,) + expectation_coefficient_g.shape) -
+            expectation_coefficient_f_tilde - np.exp(-discount_rate) * expectation_coefficient_g -
             investment_costs[T - 1])  # shape (L,) + (d,)*T
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 

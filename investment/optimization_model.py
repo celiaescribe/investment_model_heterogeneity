@@ -604,7 +604,7 @@ def state_distribution_from_control(control_sun, control_wind, add_params):
     return state_distribution
 
 
-def average_state_distribution_gamma(state_distribution, list_weight_gamma):
+def average_state_distribution_gamma(state_distribution, list_gamma, list_weight_gamma):
     """Calculates the average state over the whole beta distribution.
     Parameters
     ----------
@@ -616,11 +616,15 @@ def average_state_distribution_gamma(state_distribution, list_weight_gamma):
     new_state_distribution = []
     T = len(state_distribution)
     array_weight_gamma = np.array(list_weight_gamma)
+    array_gamma = np.array(list_gamma)
+    assert array_weight_gamma.shape == array_gamma.shape
     for t in range(0, T, 1):
         state_sun_t = state_distribution[t][0]
         state_wind_t = state_distribution[t][1]
-        average_state_sun_t = (state_sun_t * array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over beta
-        average_state_wind_t = (state_wind_t * array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over beta
+        average_state_sun_t = (state_sun_t * array_gamma.reshape(array_gamma.shape + (1,)*(t+1)) *
+                               array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over gamma
+        average_state_wind_t = (state_wind_t * array_gamma.reshape(array_gamma.shape + (1,)*(t+1)) *
+                                array_gamma.reshape(array_gamma.shape + (1,)*(t+1))).sum(0)  # we average over gamma
         new_state_distribution.append(np.array([average_state_sun_t, average_state_wind_t]))
     return new_state_distribution
 
@@ -763,7 +767,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
 
     list_total_cost_gamma = [total_cost + final_cost for (total_cost, final_cost) in zip(list_total_cost_gamma, list_final_cost_gamma)]
     # total_cost += cost_T
-    total_cost = sum([total_cost * weight_beta for (total_cost, weight_beta) in zip(list_total_cost_gamma, list_weight_gamma)])  # here, we take the average over all values for beta
+    total_cost = sum([total_cost * weight_gamma for (total_cost, weight_gamma) in zip(list_total_cost_gamma, list_weight_gamma)])  # here, we take the average over all values for beta
     return total_cost
 
 
@@ -772,7 +776,8 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                     add_params, convergence):
 
     """
-
+    Remarque: faire attention, ici state_distribution et average_state_distribution sont différents. Dans un cas, c'est
+    la distribution sur Q, et dans l'autre c'est la distribution moyenne sur \gamma * Q.
     Parameters
     ----------
     N
@@ -816,8 +821,8 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                                                 weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
         # Finding associated state distribution
-        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # includes the different beta
-        new_average_state_distribution = average_state_distribution_gamma(new_state_distribution, list_weight_gamma)  # averaged over the beta
+        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # distribution over Q
+        new_average_state_distribution = average_state_distribution_gamma(new_state_distribution, list_gamma, list_weight_gamma)  # average distribution for \gamma * Q
 
         if n % 20 == 0:
             TIKTOK.interval("optimal_control", display=True)
@@ -852,9 +857,9 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                 print(f'Objective gap: {objective_gap}', flush=True)
         if convergence == 'wolfe':
             average_state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
-                                  for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
+                                  for new_state, state in zip(new_average_state_distribution, average_state_distribution)]  # average distribution over \gamma * Q
             state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
-                                          for new_state, state in zip(new_state_distribution, state_distribution)]
+                                          for new_state, state in zip(new_state_distribution, state_distribution)]  # distribution over Q
         else:  # 'fictitious'
             average_state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
                                   for new_state, state in zip(new_average_state_distribution, average_state_distribution)]

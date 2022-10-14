@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ## BEGIN SBATCH directives
-#SBATCH --job-name=heterogeneity_no_demand
-#SBATCH --output="outputs_script/heterogeneity_no_demand.txt"
-#SBATCH --error="outputs_script/error_heterogeneity_no_demand.txt"
+#SBATCH --job-name=gamma_no_demand
+#SBATCH --output="outputs_script/gamma_no_demand.txt"
+#SBATCH --error="outputs_script/error_gamma_no_demand.txt"
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --time=100:00:00

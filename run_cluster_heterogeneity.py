@@ -35,44 +35,36 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 # discount_rate_yearly, beta, nu_deval, availnuc, cvar_level, N = 0.04, 1, 0.15, 1, 0.05, 20
 
 
-# list_beta = [0.2, 0.4, 0.6, 0.8, 1.0]
-list_avail_nuc = [0.8, 0.9]
-list_beta = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+list_beta = [0.4, 0.8]
+list_avail_nuc = [0.9]
 
-list_weight_beta_uniform = [1 / len(list_beta) for i in range(len(list_beta))]
-list_weight_beta_home1 = [0.01, 0.01, 0.03, 0.1, 0.2, 0.3, 0.2, 0.1, 0.03, 0.01, 0.01]
-list_weight_beta_home2 = [0, 0.01, 0.08, 0.14, 0.17, 0.2, 0.17, 0.14, 0.08, 0.01, 0]
-list_weight_beta_home3 = [0.06, 0.08, 0.09, 0.1, 0.11, 0.12, 0.11, 0.1, 0.09, 0.08, 0.06]
+list_gamma_2dirac = [0.9, 1.1]
+list_gamma_3dirac = [0.8, 1, 1.2]
+list_gamma = list(np.arange(0.9, 1.1, 0.02))
 
-list_weight_beta_singleton05 = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
-list_weight_beta_singleton08 = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]
+list_weight_gamma_2dirac_uniform = [1 / 2, 1 / 2]
+list_weight_gamma_3dirac_uniform = [1 / 3, 1 / 3, 1/3]
 
-n, p = 10, 0.8
-r_values = list(range(n + 1))
-pmf_values = [binom.pmf(r, n, p) for r in r_values]
-list_weight_beta_binom_08 = pmf_values  # this corresponds to a binomial distribution which I rescaled
+dict_weight_gamma_singleton = {}
+dict_gamma_singleton = {}
+for i in range(len(list_gamma)):  # creating values for dirac
+    gamma = list_gamma[i]
+    name_weight = f"singleton{round(gamma, 2)}"
+    name_weight = name_weight.replace(".", "p")
+    dict_weight_gamma_singleton[name_weight] = [1]
+    dict_gamma_singleton[name_weight] = [gamma]
 
-n, p = 10, 0.6
-r_values = list(range(n + 1))
-pmf_values = [binom.pmf(r, n, p) for r in r_values]
-list_weight_beta_binom_06 = pmf_values  # this corresponds to a binomial distribution which I rescaled
-
-n, p = 10, 0.4
-r_values = list(range(n + 1))
-pmf_values = [binom.pmf(r, n, p) for r in r_values]
-list_weight_beta_binom_04 = pmf_values  # this corresponds to a binomial distribution which I rescaled
-
-weights = {
-    'uniform': list_weight_beta_uniform,
-    'binom08': list_weight_beta_binom_08,
-    'binom06': list_weight_beta_binom_06,
-    'binom04': list_weight_beta_binom_04,
-    'home1': list_weight_beta_home1,
-    'home2': list_weight_beta_home2,
-    'home3': list_weight_beta_home3,
-    'singleton05': list_weight_beta_singleton05,
-    'singleton08': list_weight_beta_singleton08
+gamma = {
+    "2dirac": list_gamma_2dirac,
+    "3dirac": list_gamma_3dirac
 }
+weights = {
+    '2dirac': list_weight_gamma_2dirac_uniform,
+    '3dirac': list_weight_gamma_3dirac_uniform
+}
+
+gamma.update(dict_gamma_singleton)
+weights.update(dict_weight_gamma_singleton)
 
 # First test: we only try one value for beta
 # list_beta = [0.6]
@@ -80,125 +72,128 @@ weights = {
 #     'singleton': [1]
 # }
 
-for weight in list(weights.keys()):
-    list_weight_beta = weights[weight]
-    for availnuc in list_avail_nuc:
-        print(
-            f"Model with weights {weight}, discount {discount_rate_yearly}, nu {nu_deval}, nuclear {availnuc}, cvar {cvar_level}, premium {premium_value}, market cap {market_cap}",
-            flush=True)
-        # Create directory if does not exists
-        day = datetime.now().strftime("%m%d")
-        directory_name = "outputs/" + day + "_" + directory_suffix
-        Path(directory_name).mkdir(parents=True, exist_ok=True)
+for distrib in list(weights.keys()):
+    list_weight_gamma = weights[distrib]
+    list_gamma = gamma[distrib]
+    for beta in list_beta:
+        for availnuc in list_avail_nuc:
+            print(
+                f"Model with weights {distrib}, beta {beta}, discount {discount_rate_yearly}, nu {nu_deval}, nuclear {availnuc}, cvar {cvar_level}, premium {premium_value}, market cap {market_cap}",
+                flush=True)
+            # Create directory if does not exists
+            day = datetime.now().strftime("%m%d")
+            directory_name = "outputs/" + day + "_" + directory_suffix
+            Path(directory_name).mkdir(parents=True, exist_ok=True)
 
-        T = 5
-        Tprime = 8
-        time_step = 5  # number of years between investment decisions
-        discount_rate = time_step * discount_rate_yearly
-        # market_price = 10000  # market price cap
-        Delta_t = time_step * 365 * 24  # number of hours in ergodic theorem
-        voll = 15000  # value of loss load
-        c_tilde_sun = 60000  # sun, wind
-        c_tilde_wind = 120000
-        investment_costs_sun = [6 * 1e5, 5.5 * 1e5, 5.2 * 1e5, 5 * 1e5, 5 * 1e5]
-        investment_costs_wind = [12.5 * 1e5, 12 * 1e5, 11.1 * 1e5, 10.3 * 1e5, 9.8 * 1e5]
-        Q_pv_init = 10
-        Q_onshore_init = 18
-        Q_river = 10
+            T = 5
+            Tprime = 8
+            time_step = 5  # number of years between investment decisions
+            discount_rate = time_step * discount_rate_yearly
+            # market_price = 10000  # market price cap
+            Delta_t = time_step * 365 * 24  # number of hours in ergodic theorem
+            voll = 15000  # value of loss load
+            c_tilde_sun = 60000  # sun, wind
+            c_tilde_wind = 120000
+            investment_costs_sun = [6 * 1e5, 5.5 * 1e5, 5.2 * 1e5, 5 * 1e5, 5 * 1e5]
+            investment_costs_wind = [12.5 * 1e5, 12 * 1e5, 11.1 * 1e5, 10.3 * 1e5, 9.8 * 1e5]
+            Q_pv_init = 10
+            Q_onshore_init = 18
+            Q_river = 10
 
-        # premium_value = 0
-        premium = np.full((T,), premium_value)
-        additional_parameters = {'market_price': market_cap,
-                                 'voll': voll,
-                                 'discount_rate': discount_rate,
-                                 'nu_deval': nu_deval,
-                                 'Delta_t': Delta_t,
-                                 'c_tilde_sun': c_tilde_sun,
-                                 'c_tilde_wind': c_tilde_wind,
-                                 'Q_pv_init': Q_pv_init,
-                                 'Q_onshore_init': Q_onshore_init,
-                                 'Q_river': Q_river,
-                                 'investment_costs_sun': investment_costs_sun,
-                                 'investment_costs_wind': investment_costs_wind}
+            # premium_value = 0
+            premium = np.full((T,), premium_value)
+            additional_parameters = {'market_price': market_cap,
+                                     'voll': voll,
+                                     'discount_rate': discount_rate,
+                                     'nu_deval': nu_deval,
+                                     'Delta_t': Delta_t,
+                                     'c_tilde_sun': c_tilde_sun,
+                                     'c_tilde_wind': c_tilde_wind,
+                                     'Q_pv_init': Q_pv_init,
+                                     'Q_onshore_init': Q_onshore_init,
+                                     'Q_river': Q_river,
+                                     'investment_costs_sun': investment_costs_sun,
+                                     'investment_costs_wind': investment_costs_wind}
 
-        # Demand scenarios
-        trans_matrix, demand_states = demand_model_no_uncertainty()
+            # Demand scenarios
+            trans_matrix, demand_states = demand_model_no_uncertainty()
 
-        # Scenario gas prices
-        np.random.seed(123)
-        nb_scenario_gas = 100
-        variation_gas = np.random.uniform(-20, 20, nb_scenario_gas)
+            # Scenario gas prices
+            np.random.seed(123)
+            nb_scenario_gas = 100
+            variation_gas = np.random.uniform(-20, 20, nb_scenario_gas)
 
-        # Weather params
-        joint_law, x_cutoff, y_cutoff, Q_offshore = data_process_with_scenarios(period="large", avail_nuclear=availnuc)
-        demand_centered = np.array(joint_law.demand_centered_group)
-        pv = np.array(joint_law.pv_group)
-        onshore = np.array(joint_law.onshore_group)
-        offshore = np.array(joint_law.offshore_group)
-        river = np.array(joint_law.river_group)
-        hydro_prod = np.array(joint_law.hydro_prod_group)
-        probability = np.array(joint_law.probability)
-        weather_params = {
-            "demand": demand_centered,
-            "sun": pv,
-            "onshore": onshore,
-            "offshore": offshore,
-            "river": river,
-            "hydro": hydro_prod,
-            "proba": probability
-        }
-        demand_centered_tot, pv_tot, onshore_tot, offshore_tot, river_tot, hydro_prod_tot, probability_tot, year_tot = load_all_weather_data(
-            1980, 2019, imports=False)  # we do not consider imports for now
-        weather_tot_params = {
-            "demand": demand_centered_tot,
-            "sun": pv_tot,
-            "onshore": onshore_tot,
-            "offshore": offshore_tot,
-            "river": river_tot,
-            "hydro": hydro_prod_tot,
-            "proba": probability_tot,
-            "years": year_tot
-        }
-        # Initialize strategy
-        strategy_init = []
-        # strategy_RTE_sun = [25, 40, 60, 80, 100]
-        # strategy_RTE_wind = [25, 35, 40, 50, 55]
-        strategy_sun_init = [0, 10, 20, 40, 60]  # we initialize with values obtained with no premium
-        strategy_wind_init = [0, 15, 40, 60, 100]
+            # Weather params
+            joint_law, x_cutoff, y_cutoff, Q_offshore = data_process_with_scenarios(period="large", avail_nuclear=availnuc)
+            demand_centered = np.array(joint_law.demand_centered_group)
+            pv = np.array(joint_law.pv_group)
+            onshore = np.array(joint_law.onshore_group)
+            offshore = np.array(joint_law.offshore_group)
+            river = np.array(joint_law.river_group)
+            hydro_prod = np.array(joint_law.hydro_prod_group)
+            probability = np.array(joint_law.probability)
+            weather_params = {
+                "demand": demand_centered,
+                "sun": pv,
+                "onshore": onshore,
+                "offshore": offshore,
+                "river": river,
+                "hydro": hydro_prod,
+                "proba": probability
+            }
+            demand_centered_tot, pv_tot, onshore_tot, offshore_tot, river_tot, hydro_prod_tot, probability_tot, year_tot = load_all_weather_data(
+                1980, 2019, imports=False)  # we do not consider imports for now
+            weather_tot_params = {
+                "demand": demand_centered_tot,
+                "sun": pv_tot,
+                "onshore": onshore_tot,
+                "offshore": offshore_tot,
+                "river": river_tot,
+                "hydro": hydro_prod_tot,
+                "proba": probability_tot,
+                "years": year_tot
+            }
+            # Initialize strategy
+            strategy_init = []
+            # strategy_RTE_sun = [25, 40, 60, 80, 100]
+            # strategy_RTE_wind = [25, 35, 40, 50, 55]
+            strategy_sun_init = [0, 10, 20, 40, 60]  # we initialize with values obtained with no premium
+            strategy_wind_init = [0, 15, 40, 60, 100]
 
-        for t in range(0, T, 1):
-            strategy_t_sun = np.full((3,) * (t + 1), strategy_sun_init[t])
-            strategy_t_wind = np.full((3,) * (t + 1), strategy_wind_init[t])
-            strategy_t = np.array([strategy_t_sun, strategy_t_wind])
-            strategy_init.append(strategy_t)
+            for t in range(0, T, 1):
+                strategy_t_sun = np.full((3,) * (t + 1), strategy_sun_init[t])
+                strategy_t_wind = np.full((3,) * (t + 1), strategy_wind_init[t])
+                strategy_t = np.array([strategy_t_sun, strategy_t_wind])
+                strategy_init.append(strategy_t)
 
-        # Run algorithm
-        state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T,
-                                                                                 Tprime=Tprime,
-                                                                                 state_init=strategy_init,
-                                                                                 trans_matrix=trans_matrix,
-                                                                                 demand_states=demand_states,
-                                                                                 list_beta=list_beta,
-                                                                                 list_weight_beta=list_weight_beta,
-                                                                                 alpha=cvar_level,
-                                                                                 start=1980,
-                                                                                 end=2019,
-                                                                                 gas_scenarios=variation_gas,
-                                                                                 premium=premium,
-                                                                                 weather_params=weather_params,
-                                                                                 weather_tot_params=weather_tot_params,
-                                                                                 Q_offshore=Q_offshore,
-                                                                                 x_cutoff=x_cutoff,
-                                                                                 y_cutoff=y_cutoff,
-                                                                                 add_params=additional_parameters,
-                                                                                 convergence="wolfe")
+            # Run algorithm
+            state_distribution, objective_gap, index_objective_gap = fictitious_play(N=N, T=T,
+                                                                                     Tprime=Tprime,
+                                                                                     state_init=strategy_init,
+                                                                                     trans_matrix=trans_matrix,
+                                                                                     demand_states=demand_states,
+                                                                                     beta=beta,
+                                                                                     list_gamma=list_gamma,
+                                                                                     list_weight_gamma=list_weight_gamma,
+                                                                                     alpha=cvar_level,
+                                                                                     start=1980,
+                                                                                     end=2019,
+                                                                                     gas_scenarios=variation_gas,
+                                                                                     premium=premium,
+                                                                                     weather_params=weather_params,
+                                                                                     weather_tot_params=weather_tot_params,
+                                                                                     Q_offshore=Q_offshore,
+                                                                                     x_cutoff=x_cutoff,
+                                                                                     y_cutoff=y_cutoff,
+                                                                                     add_params=additional_parameters,
+                                                                                     convergence="wolfe")
 
-        # Process output
-        subdirectory_name = directory_name + f"/weight{weight}_discount{discount_rate_yearly}_nu{nu_deval}_premium{premium_value}_availnuc{availnuc}_cvar{cvar_level}_cap{market_cap}"
-        subdirectory_name = subdirectory_name.replace(".", "p")  # replace all points in file by p to avoid problems
-        subdirectory_name = subdirectory_name.replace("-",
-                                                      "m")  # replace all minus in file by symbol m to avoid problems
-        Path(subdirectory_name).mkdir(parents=True, exist_ok=True)
+            # Process output
+            subdirectory_name = directory_name + f"/weight{distrib}_beta{beta}_discount{discount_rate_yearly}_nu{nu_deval}_premium{premium_value}_availnuc{availnuc}_cvar{cvar_level}_cap{market_cap}"
+            subdirectory_name = subdirectory_name.replace(".", "p")  # replace all points in file by p to avoid problems
+            subdirectory_name = subdirectory_name.replace("-",
+                                                          "m")  # replace all minus in file by symbol m to avoid problems
+            Path(subdirectory_name).mkdir(parents=True, exist_ok=True)
 
-        process_output(T, state_distribution, objective_gap, index_objective_gap, list_beta, list_weight_beta,
-                       subdirectory_name, additional_parameters)
+            process_output(T, state_distribution, objective_gap, index_objective_gap, list_gamma, list_weight_gamma,
+                           subdirectory_name, additional_parameters)

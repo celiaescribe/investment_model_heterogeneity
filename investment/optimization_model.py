@@ -524,7 +524,7 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gam
     # We also devaluate one time expectation_coefficient_g for the same reason as previously
 
 
-def find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end, gas_scenarios, Q: list,
+def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end, gas_scenarios, Q: list,
                          premium, weather_params, weather_tot_params, Q_offshore, tec,
                          x_cutoff: list, y_cutoff: list, add_params):
     """
@@ -554,7 +554,7 @@ def find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alph
         y_cutoff) == T
     # optimal_strategy = np.zeros(Q_sun.shape)
     optimal_strategy = []
-    control_final = optimal_control_final(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
+    control_final = optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                           gas_scenarios, Q[T - 1], premium[T - 1], weather_params,
                                           weather_tot_params, Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
                                           add_params)  # shape (L,) + (d,)*T
@@ -562,7 +562,7 @@ def find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alph
     # optimal_strategy[T - 1, :] = control_final
     control_next = control_final
     for t in range(T - 2, -1, -1):
-        control_time_t = recursive_optimal_control(t, control_next, trans_matrix, demand_states, list_beta, alpha, start,
+        control_time_t = recursive_optimal_control(t, control_next, trans_matrix, demand_states, beta, list_gamma, alpha, start,
                                                    end, gas_scenarios, Q[t], premium[t], weather_params,
                                                    weather_tot_params, Q_offshore[t], tec, x_cutoff[t], y_cutoff[t],
                                                    add_params)  # shape (L,) + (d,)*(t+1)
@@ -604,7 +604,7 @@ def state_distribution_from_control(control_sun, control_wind, add_params):
     return state_distribution
 
 
-def average_state_distribution_beta(state_distribution, list_weight_beta):
+def average_state_distribution_gamma(state_distribution, list_weight_gamma):
     """Calculates the average state over the whole beta distribution.
     Parameters
     ----------
@@ -615,12 +615,12 @@ def average_state_distribution_beta(state_distribution, list_weight_beta):
     """
     new_state_distribution = []
     T = len(state_distribution)
-    array_weight_beta = np.array(list_weight_beta)
+    array_weight_gamma = np.array(list_weight_gamma)
     for t in range(0, T, 1):
         state_sun_t = state_distribution[t][0]
         state_wind_t = state_distribution[t][1]
-        average_state_sun_t = (state_sun_t * array_weight_beta.reshape(array_weight_beta.shape + (1,)*(t+1))).sum(0)  # we average over beta
-        average_state_wind_t = (state_wind_t * array_weight_beta.reshape(array_weight_beta.shape + (1,)*(t+1))).sum(0)  # we average over beta
+        average_state_sun_t = (state_sun_t * array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over beta
+        average_state_wind_t = (state_wind_t * array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over beta
         new_state_distribution.append(np.array([average_state_sun_t, average_state_wind_t]))
     return new_state_distribution
 
@@ -661,7 +661,7 @@ def decouple_state_distribution(state_distribution):
 
 
 def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t, demand_states, proba_time_t,
-                trans_matrix, list_beta, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
+                trans_matrix, beta, list_gamma, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                 Q_offshore_t, tec, x_cutoff_t, y_cutoff_t, add_params):
     """Returns expected cost at time t specified for each possible uncertainty path"""
     assert opt_control_t.ndim == state_distribution_t.ndim == t + 1 + 1  # here, we added one dimension for the beta
@@ -692,31 +692,31 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
                                             add_params)  # shape (d,)*(t+1)
     assert state_distribution_t[0,...].shape == cvar_coefficient_f.shape == proba_time_t.shape  # we need to remove first dimension associated with beta in the state distribution
 
-    list_cost_beta = []
-    for i in range(len(list_beta)):  # here, we pay attention to selecting only state and control associated with given beta
-        cvar_cost_beta = -(1 - list_beta[i]) * np.exp(-discount_rate * t) * (
+    list_cost_gamma = []
+    for i in range(len(list_gamma)):  # here, we pay attention to selecting only state and control associated with given beta
+        cvar_cost_beta = -(1 - beta) * np.exp(-discount_rate * t) * (
                 state_distribution_t[i, ...] * cvar_coefficient_f * proba_time_t)  # shape (d,)*(t+1)
         investment_cost_beta = np.exp(-discount_rate * t) * (
                 investment_costs[t] * opt_control_t[i, ...] + c_tilde * opt_control_t[i, ...] ** 2) * proba_time_t  # shape  (d,)*(t+1)
-        expected_cost_beta = - list_beta[i] * np.exp(-discount_rate * t) * (state_distribution_t[i,...].reshape(
+        expected_cost_beta = - beta * np.exp(-discount_rate * t) * (state_distribution_t[i,...].reshape(
             state_distribution_t[i,...].shape + (1,)) * coef_f * proba_time_t_next)  # shape (d,)*(t+2)
         # remark: we reshape to add a dimension for the beta coefficient
         # TODO: il y a peut-être des erreurs de broadcast ici
 
-        cost_beta = cvar_cost_beta.sum() + investment_cost_beta.sum() + expected_cost_beta.sum()  # float
-        list_cost_beta.append(cost_beta)
-    return list_cost_beta, proba_time_t_next
+        cost_beta = list_gamma[i] * (cvar_cost_beta.sum() + expected_cost_beta.sum()) + investment_cost_beta.sum()   # float
+        list_cost_gamma.append(cost_beta)
+    return list_cost_gamma, proba_time_t_next
 
 
-def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, list_beta,
-                list_weight_beta, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
+def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, beta, list_gamma,
+                list_weight_gamma, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
                 x_cutoff: list, y_cutoff: list, add_params):
     """Returns total player's cost for a given strategy and corresponding state distribution"""
     discount_rate, nu_deval = add_params["discount_rate"], add_params["nu_deval"]
     assert len(opt_control) == len(state_distribution) == len(other_state_distribution) == trans_matrix.shape[0] == T
     proba_time_t = np.array([0, 1, 0])  # we initialize the probability by stating that we are at state 1 when t=-1
     total_cost = 0
-    list_total_cost_beta = [0 for i in range(len(list_beta))]  # initialize costs to zero
+    list_total_cost_gamma = [0 for i in range(len(list_gamma))]  # initialize costs to zero
     for t in range(0, T, 1):
         opt_control_t = opt_control[t]
         if tec == 'sun':
@@ -725,13 +725,14 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
             state_distribution_t = state_distribution[t][1]  # includes beta heterogeneity
         other_state_distribution_t = other_state_distribution[t]  # already integrated over the beta heterogeneity
         assert proba_time_t.ndim == t + 1
-        list_cost_beta_t, proba_time_t_next = cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t,
-                                                demand_states, proba_time_t, trans_matrix, list_beta, alpha, start, end,
+        list_cost_gamma_t, proba_time_t_next = cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t,
+                                                demand_states, proba_time_t, trans_matrix, beta, list_gamma, alpha, start, end,
                                                           gas_scenarios, premium[t], weather_params, weather_tot_params,
                                                           Q_offshore[t], tec, x_cutoff[t], y_cutoff[t], add_params)
-        list_total_cost_beta = [total_cost + cost_t for (total_cost, cost_t) in zip(list_total_cost_beta, list_cost_beta_t)]  # TODO: il y a peut-être un problème ici
+        list_total_cost_gamma = [total_cost + cost_t for (total_cost, cost_t) in zip(list_total_cost_gamma, list_cost_gamma_t)]  # TODO: il y a peut-être un problème ici
         # total_cost = total_cost + cost_t
         proba_time_t = proba_time_t_next  # shape (d,)*(t+2)
+
     D_average_T = demand_states[T - 1, :]
     # Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
     Q_T = other_state_distribution[T - 1]
@@ -740,41 +741,33 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
                                 Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
                                 add_params)  # shape (d,)*(T+1)
 
-    # if tec == 'sun':
-    #     cost_final = np.exp(-discount_rate * T) * \
-    #                  (state_distribution[T - 1][0] * (1 - nu_deval)).reshape(
-    #                      state_distribution[T - 1][0].shape + (1,)) * coef_g  # shape (d,)*(T+1)
-    # else:
-    #     cost_final = np.exp(-discount_rate * T) * \
-    #                  (state_distribution[T - 1][1] * (1 - nu_deval)).reshape(
-    #                      state_distribution[T - 1][1].shape + (1,)) * coef_g  # shape (d,)*(T+1)
-    list_final_cost_beta = []
+    list_final_cost_gamma = []
     if tec == 'sun':  # TODO: pareil, j'ai changé pour enlever la dévaluation de coef_g, il pourrait y avoir des bugs
-        for i in range(len(list_beta)):
-            cost_final_beta = np.exp(-discount_rate * T) * \
-                         (state_distribution[T - 1][0][i, ...]).reshape(
-                             state_distribution[T - 1][0][i, ...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
-            assert cost_final_beta.shape == proba_time_t.shape
-            cost_final_beta_with_proba = cost_final_beta * proba_time_t
-            cost_T_beta = cost_final_beta_with_proba.sum()
-            list_final_cost_beta.append(cost_T_beta)
+        for i in range(len(list_gamma)):
+            cost_final_gamma = list_gamma[i] * (np.exp(-discount_rate * T) *
+                                                (state_distribution[T - 1][0][i, ...]).reshape(
+                             state_distribution[T - 1][0][i, ...].shape + (1,)) * coef_g)  # shape (d,)*(T+1)
+            assert cost_final_gamma.shape == proba_time_t.shape
+            cost_final_gamma_with_proba = cost_final_gamma * proba_time_t
+            cost_T_gamma = cost_final_gamma_with_proba.sum()
+            list_final_cost_gamma.append(cost_T_gamma)
     else:
-        for i in range(len(list_beta)):
-            cost_final_beta = np.exp(-discount_rate * T) * \
-                         (state_distribution[T - 1][1][i, ...]).reshape(
-                             state_distribution[T - 1][1][i, ...].shape + (1,)) * coef_g  # shape (d,)*(T+1)
-            assert cost_final_beta.shape == proba_time_t.shape
-            cost_final_beta_with_proba = cost_final_beta * proba_time_t
-            cost_T_beta = cost_final_beta_with_proba.sum()
-            list_final_cost_beta.append(cost_T_beta)
+        for i in range(len(list_gamma)):
+            cost_final_gamma = list_gamma[i] * (np.exp(-discount_rate * T) *
+                                                (state_distribution[T - 1][1][i, ...]).reshape(
+                             state_distribution[T - 1][1][i, ...].shape + (1,)) * coef_g)  # shape (d,)*(T+1)
+            assert cost_final_gamma.shape == proba_time_t.shape
+            cost_final_gamma_with_proba = cost_final_gamma * proba_time_t
+            cost_T_gamma = cost_final_gamma_with_proba.sum()
+            list_final_cost_gamma.append(cost_T_gamma)
 
-    list_total_cost_beta = [total_cost + final_cost for (total_cost, final_cost) in zip(list_total_cost_beta, list_final_cost_beta)]
+    list_total_cost_gamma = [total_cost + final_cost for (total_cost, final_cost) in zip(list_total_cost_gamma, list_final_cost_gamma)]
     # total_cost += cost_T
-    total_cost = sum([total_cost * weight_beta for (total_cost, weight_beta) in zip(list_total_cost_beta, list_weight_beta)])  # here, we take the average over all values for beta
+    total_cost = sum([total_cost * weight_beta for (total_cost, weight_beta) in zip(list_total_cost_gamma, list_weight_gamma)])  # here, we take the average over all values for beta
     return total_cost
 
 
-def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, list_beta, list_weight_beta, alpha, start, end,
+def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma, alpha, start, end,
                     gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, x_cutoff, y_cutoff,
                     add_params, convergence):
 
@@ -796,10 +789,10 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                           f"{len(state_init)} "
     assert convergence in ['wolfe', 'fictitious'], "Parameter convergence does not take allowed value."
     average_state_distribution = state_init
-    state_distribution = []  # we create an initial distribution including beta heterogeneity
+    state_distribution = []  # we create an initial distribution including gamma heterogeneity
     for t in range(0, len(average_state_distribution), 1):
-        state_distribution_sun_t = np.repeat(average_state_distribution[t][0][np.newaxis, ...], len(list_beta), axis=0)
-        state_distribution_wind_t = np.repeat(average_state_distribution[t][1][np.newaxis, ...], len(list_beta), axis=0)
+        state_distribution_sun_t = np.repeat(average_state_distribution[t][0][np.newaxis, ...], len(list_gamma), axis=0)
+        state_distribution_wind_t = np.repeat(average_state_distribution[t][1][np.newaxis, ...], len(list_gamma), axis=0)
         state_distribution.append(np.array([state_distribution_sun_t, state_distribution_wind_t]))
 
     previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)  # includes beta heterogeneity
@@ -814,38 +807,38 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
 
         # Finding optimal control
         TIKTOK.interval("optimal_control", display=False)
-        opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
+        opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                                gas_scenarios, average_state_distribution, premium, weather_params,
                                                weather_tot_params, Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
-        opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, list_beta, alpha, start, end,
+        opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                                 gas_scenarios, average_state_distribution, premium, weather_params,
                                                 weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
         # Finding associated state distribution
         new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # includes the different beta
-        new_average_state_distribution = average_state_distribution_beta(new_state_distribution, list_weight_beta)  # averaged over the beta
+        new_average_state_distribution = average_state_distribution_gamma(new_state_distribution, list_weight_gamma)  # averaged over the beta
 
         if n % 20 == 0:
             TIKTOK.interval("optimal_control", display=True)
             # TODO: a corriger !! il faut modifier l'appel à new_state_distribution, car on a des états qui diffèrent selon le paramètre beta
             current_player_cost_sun = player_cost(T, Tprime, opt_control_sun, new_state_distribution,
-                                                  average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                  average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                   alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                   Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
             previous_player_cost_sun = player_cost(T, Tprime, previous_control_sun, state_distribution,
-                                                   average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                   average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                    alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                    Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
 
             current_player_cost_wind = player_cost(T, Tprime, opt_control_wind, new_state_distribution,
-                                                   average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                   average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                    alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                    Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
             previous_player_cost_wind = player_cost(T, Tprime, previous_control_wind, state_distribution,
-                                                    average_state_distribution, trans_matrix, demand_states, list_beta, list_weight_beta,
+                                                    average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                     alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
                                                     Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 

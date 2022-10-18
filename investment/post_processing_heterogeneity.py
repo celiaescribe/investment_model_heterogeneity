@@ -118,7 +118,7 @@ def create_state_dataframe_heterogeneity(state_distribution_dict, list_hetero_pa
                                                                                name_param, time_list,
                                                                                demand_trajectory_dict[demand_traj],
                                                                                state_distribution_dict[param])
-            state_sun["tec"], state_sun[keyword1], state_sun[keyword2], state_sun["demand_trajectory"] = "sun", param1, param2, demand_traj  # a verifier, peut etre pas le bon code pour observer ce qu'on veut
+            state_sun["tec"], state_sun[keyword1], state_sun[keyword2], state_sun["demand_trajectory"] = "sun", param1, param2, demand_traj
             state_wind["tec"], state_wind[keyword1], state_wind[keyword2], state_wind["demand_trajectory"] = "wind", param1, param2, demand_traj
             # state = pd.merge(state_sun, state_wind, on=["time", "beta"])
             #  state = state.rename(columns)   # il faut renommer les colonnes !

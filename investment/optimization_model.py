@@ -866,5 +866,5 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                                   for new_state, state in zip(new_average_state_distribution, average_state_distribution)]
             state_distribution = [1 / (n + 1) * new_state + n / (n + 1) * state
                                   for new_state, state in zip(new_state_distribution, state_distribution)]
-        previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)
+        previous_control_sun, previous_control_wind = control_from_state(state_distribution, add_params)  # includes gamma heterogeneity
     return state_distribution, np.array(objective_gap), np.array(index_objective_gap)

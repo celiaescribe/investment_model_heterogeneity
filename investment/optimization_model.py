@@ -490,28 +490,29 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gam
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
+    # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
+    coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
+                                                Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+
     expectation_coefficient_f_tilde_gamma = []
-    coef_g_values_gamma = []
+    coef_g_values_listgamma = []
     for gamma in list_gamma:  # we calculate expectation_coefficient_f_tilde for all beta values
         expectation_coefficient_f_tilde = gamma * (beta * expectation_coefficient_f + (1 - beta) * cvar_coefficient_f)
         expectation_coefficient_f_tilde = expectation_coefficient_f_tilde.reshape(
             (1,) + expectation_coefficient_f_tilde.shape)
         expectation_coefficient_f_tilde_gamma.append(expectation_coefficient_f_tilde)
 
-        # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
-        coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
-                                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
-        coef_g_values = gamma * coef_g_values
-        coef_g_values = coef_g_values.reshape((1,) + coef_g_values.shape)
-        coef_g_values_gamma.append(coef_g_values)
+        coef_g_values_gamma = gamma * coef_g_values
+        coef_g_values_gamma = coef_g_values_gamma.reshape((1,) + coef_g_values.shape)
+        coef_g_values_listgamma.append(coef_g_values_gamma)
 
     expectation_coefficient_f_tilde = np.concatenate(expectation_coefficient_f_tilde_gamma, axis=0)
-    coef_g_values = np.concatenate(coef_g_values_gamma, axis=0)
+    coef_g_values_listgamma = np.concatenate(coef_g_values_listgamma, axis=0)
 
-    assert coef_g_values.ndim == T + 1 + 1  # we added a dimension for the gamma
+    assert coef_g_values_listgamma.ndim == T + 1 + 1  # we added a dimension for the gamma
     # We devaluate one time Q for coef_g_values, as the investment decision was taken at time T-1, and so they have
     # already been devaluated once
-    expectation_coefficient_g = (trans_matrix_T_1 * coef_g_values).sum(-1)  # shape (L,) + (d,)*T
+    expectation_coefficient_g = (trans_matrix_T_1 * coef_g_values_listgamma).sum(-1)  # shape (L,) + (d,)*T
 
     investment_costs = add_params[f'investment_costs_{tec}']
     # return 1 / (2 * c_tilde) * (

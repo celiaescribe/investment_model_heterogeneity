@@ -39,8 +39,8 @@ def process_files_from_folder_heterogeneity(directory, keyword1, keyword2):
     state_distribution_dict = {}
     objective_gap_dict = {}
     index_objective_dict = {}
-    list_beta_dict = {}
-    list_weight_beta_dict = {}
+    list_hetero_param_dict = {}
+    list_weight_hetero_param_dict = {}
 
     L1 = len(keyword1)
     L2 = len(keyword2)
@@ -56,25 +56,25 @@ def process_files_from_folder_heterogeneity(directory, keyword1, keyword2):
                 param2 = s[L2:]
 
         total_path = directory + path + '/' + hour
-        control_sun, control_wind, objective_gap, index_objective_gap, list_beta, list_weight_beta, additional_parameters = load_results_heterogeneity(total_path)
+        control_sun, control_wind, objective_gap, index_objective_gap, list_hetero_param, list_weight_hetero_param, additional_parameters = load_results_heterogeneity(total_path)
         state_distribution = state_distribution_from_control(control_sun, control_wind, additional_parameters)
         state_distribution_dict[(param1, param2)] = state_distribution
         objective_gap_dict[(param1, param2)] = objective_gap
         index_objective_dict[(param1, param2)] = index_objective_gap
-        list_beta_dict[(param1, param2)] = list_beta
-        list_weight_beta_dict[(param1, param2)] = list_weight_beta
-    return state_distribution_dict, objective_gap_dict, index_objective_dict, list_beta_dict, list_weight_beta_dict
+        list_hetero_param_dict[(param1, param2)] = list_hetero_param
+        list_weight_hetero_param_dict[(param1, param2)] = list_weight_hetero_param
+    return state_distribution_dict, objective_gap_dict, index_objective_dict, list_hetero_param_dict, list_weight_hetero_param_dict
 
 
-def state_from_demand_trajectory_heterogeneity(list_beta, list_weight_beta, time_list, demand_trajectory, state_distribution):
+def state_from_demand_trajectory_heterogeneity(list_hetero_param, list_weight_hetero_param, name_param, time_list, demand_trajectory, state_distribution):
     """Returns two lists of sequential state values for technology sun and wind, corresponding to a
     given demand trajectory, where the demand trajectory is specified from time -1 to time T-2 (as state at time
     T-1 depends only on demand until time T-2."""
     state_trajectory_sun, state_trajectory_wind = pd.DataFrame({"time": pd.Series(dtype='str'),
-                                                                "beta": pd.Series(dtype="float"),
+                                                                name_param: pd.Series(dtype="float"),
                                                                 "state": pd.Series(dtype="float")}), \
                                                     pd.DataFrame({"time": pd.Series(dtype='str'),
-                                                                  "beta": pd.Series(dtype="float"),
+                                                                  name_param: pd.Series(dtype="float"),
                                                                   "state": pd.Series(dtype="float")})
     for t in range(len(state_distribution)):
         time = time_list[t]
@@ -84,8 +84,8 @@ def state_from_demand_trajectory_heterogeneity(list_beta, list_weight_beta, time
                 t + 1):  # state at time t depends from demand value from t=-1 to t-1 (which is a total of t+1 values)
             state_sun_t = state_sun_t[:, demand_trajectory[i]]  # we keep the initial dimension corresponding to beta
             state_wind_t = state_wind_t[:, demand_trajectory[i]]  # we keep the initial dimension corresponding to beta
-        state_dataframe_sun_t = pd.DataFrame({'time': [time]*len(list_beta), 'beta': list_beta, 'beta_weight': list_weight_beta, 'state': state_sun_t})
-        state_dataframe_wind_t = pd.DataFrame({'time': [time] * len(list_beta), 'beta': list_beta, 'beta_weight': list_weight_beta, 'state': state_wind_t})
+        state_dataframe_sun_t = pd.DataFrame({'time': [time]*len(list_hetero_param), name_param: list_hetero_param, f'{name_param}_weight': list_weight_hetero_param, 'state': state_sun_t})
+        state_dataframe_wind_t = pd.DataFrame({'time': [time] * len(list_hetero_param), name_param: list_hetero_param, f'{name_param}_weight': list_weight_hetero_param, 'state': state_wind_t})
         state_trajectory_sun = pd.concat([state_trajectory_sun, state_dataframe_sun_t], ignore_index=True)
         state_trajectory_wind = pd.concat([state_trajectory_wind, state_dataframe_wind_t], ignore_index=True)
     return state_trajectory_sun, state_trajectory_wind
@@ -99,22 +99,23 @@ def state_from_demand_trajectory_heterogeneity(list_beta, list_weight_beta, time
 #     return 0
 
 
-def create_state_dataframe_heterogeneity(state_distribution_dict, list_beta_dict, list_weight_beta_dict,
-                                         demand_trajectory_dict, demand_list, keyword1: str,
+def create_state_dataframe_heterogeneity(state_distribution_dict, list_hetero_param_dict, list_weight_hetero_param_dict,
+                                         name_param, demand_trajectory_dict, demand_list, keyword1: str,
                                          keyword2: str, param_list, time_list):
     """Returns a dataframe compiling state values for different model parameters for two parameters
     (risk aversion, ...), for different technologies, and different demand trajectories."""
     state_dataframe = pd.DataFrame(
         {"time": pd.Series(dtype='str'), "state": pd.Series(dtype="float"), "tec": pd.Series(dtype="str"),
          keyword1: pd.Series(dtype="str"), keyword2: pd.Series(dtype="str"), "demand_trajectory": pd.Series(dtype="str"),
-         "beta": pd.Series(dtype='float'), 'beta_weight': pd.Series(dtype='float')})
+         name_param: pd.Series(dtype='float'), f'{name_param}_weight': pd.Series(dtype='float')})
 
     for param in param_list:
         (param1, param2) = param
         # print(f"Param1 : {param1}, Param2: {param2}")
         for demand_traj in demand_list:
-            state_sun, state_wind = state_from_demand_trajectory_heterogeneity(list_beta_dict[param],
-                                                                               list_weight_beta_dict[param], time_list,
+            state_sun, state_wind = state_from_demand_trajectory_heterogeneity(list_hetero_param_dict[param],
+                                                                               list_weight_hetero_param_dict[param],
+                                                                               name_param, time_list,
                                                                                demand_trajectory_dict[demand_traj],
                                                                                state_distribution_dict[param])
             state_sun["tec"], state_sun[keyword1], state_sun[keyword2], state_sun["demand_trajectory"] = "sun", param1, param2, demand_traj  # a verifier, peut etre pas le bon code pour observer ce qu'on veut

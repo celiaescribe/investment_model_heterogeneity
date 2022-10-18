@@ -625,7 +625,7 @@ def average_state_distribution_gamma(state_distribution, list_gamma, list_weight
         average_state_sun_t = (state_sun_t * array_gamma.reshape(array_gamma.shape + (1,)*(t+1)) *
                                array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over gamma
         average_state_wind_t = (state_wind_t * array_gamma.reshape(array_gamma.shape + (1,)*(t+1)) *
-                                array_gamma.reshape(array_gamma.shape + (1,)*(t+1))).sum(0)  # we average over gamma
+                                array_weight_gamma.reshape(array_weight_gamma.shape + (1,)*(t+1))).sum(0)  # we average over gamma
         new_state_distribution.append(np.array([average_state_sun_t, average_state_wind_t]))
     return new_state_distribution
 
@@ -699,17 +699,17 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
 
     list_cost_gamma = []
     for i in range(len(list_gamma)):  # here, we pay attention to selecting only state and control associated with given beta
-        cvar_cost_beta = -(1 - beta) * np.exp(-discount_rate * t) * (
+        cvar_cost_gamma = -(1 - beta) * np.exp(-discount_rate * t) * (
                 state_distribution_t[i, ...] * cvar_coefficient_f * proba_time_t)  # shape (d,)*(t+1)
-        investment_cost_beta = np.exp(-discount_rate * t) * (
+        investment_cost_gamma = np.exp(-discount_rate * t) * (
                 investment_costs[t] * opt_control_t[i, ...] + c_tilde * opt_control_t[i, ...] ** 2) * proba_time_t  # shape  (d,)*(t+1)
-        expected_cost_beta = - beta * np.exp(-discount_rate * t) * (state_distribution_t[i,...].reshape(
+        expected_cost_gamma = - beta * np.exp(-discount_rate * t) * (state_distribution_t[i,...].reshape(
             state_distribution_t[i,...].shape + (1,)) * coef_f * proba_time_t_next)  # shape (d,)*(t+2)
         # remark: we reshape to add a dimension for the beta coefficient
         # TODO: il y a peut-être des erreurs de broadcast ici
 
-        cost_beta = list_gamma[i] * (cvar_cost_beta.sum() + expected_cost_beta.sum()) + investment_cost_beta.sum()   # float
-        list_cost_gamma.append(cost_beta)
+        cost_gamma = list_gamma[i] * (cvar_cost_gamma.sum() + expected_cost_gamma.sum()) + investment_cost_gamma.sum()   # float
+        list_cost_gamma.append(cost_gamma)
     return list_cost_gamma, proba_time_t_next
 
 
@@ -731,9 +731,9 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
         other_state_distribution_t = other_state_distribution[t]  # already integrated over the beta heterogeneity
         assert proba_time_t.ndim == t + 1
         list_cost_gamma_t, proba_time_t_next = cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution_t,
-                                                demand_states, proba_time_t, trans_matrix, beta, list_gamma, alpha, start, end,
-                                                          gas_scenarios, premium[t], weather_params, weather_tot_params,
-                                                          Q_offshore[t], tec, x_cutoff[t], y_cutoff[t], add_params)
+                                                           demand_states, proba_time_t, trans_matrix, beta, list_gamma, alpha, start, end,
+                                                           gas_scenarios, premium[t], weather_params, weather_tot_params,
+                                                           Q_offshore[t], tec, x_cutoff[t], y_cutoff[t], add_params)
         list_total_cost_gamma = [total_cost + cost_t for (total_cost, cost_t) in zip(list_total_cost_gamma, list_cost_gamma_t)]  # TODO: il y a peut-être un problème ici
         # total_cost = total_cost + cost_t
         proba_time_t = proba_time_t_next  # shape (d,)*(t+2)
@@ -822,7 +822,7 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
                                                 weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
 
         # Finding associated state distribution
-        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # distribution over Q
+        new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # distribution over Q, including gamma heterogeneity
         new_average_state_distribution = average_state_distribution_gamma(new_state_distribution, list_gamma, list_weight_gamma)  # average distribution for \gamma * Q
 
         if n % 20 == 0:

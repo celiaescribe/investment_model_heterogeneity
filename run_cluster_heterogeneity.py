@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import argparse
 from scipy.stats import binom
-from investment.utils import generate_distributions_small, generate_distribution_large
+from investment.utils import generate_distributions_small, generate_distribution_large, generate_distribution_beta_binomial
 
 parser = argparse.ArgumentParser(description='Run investment model.')
 parser.add_argument("-d", "--discount", type=float, help="discount rate")
@@ -39,7 +39,7 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 list_beta = [0.4, 0.8]
 list_avail_nuc = [0.9]
 
-gamma, weights = generate_distribution_large()
+gamma, weights = generate_distribution_beta_binomial()
 
 # First test: we only try one value for beta
 # list_beta = [0.6]

@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import betabinom
 
 
 def generate_distributions_small():
@@ -78,5 +79,7 @@ def generate_distribution_large():
     return gamma, weights
 
 
-def generate_distribution_beta_binomial(n):
-    return 0
+def generate_distribution_beta_binomial(n, a, b):
+    r_values = list(range(n + 1))
+    pmf_values = [betabinom.pmf(r, n, a, b) for r in r_values]
+    return pmf_values

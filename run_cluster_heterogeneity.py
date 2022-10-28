@@ -8,6 +8,7 @@ from pathlib import Path
 import json
 import argparse
 from scipy.stats import binom
+from investment.utils import generate_distributions_small, generate_distribution_large
 
 parser = argparse.ArgumentParser(description='Run investment model.')
 parser.add_argument("-d", "--discount", type=float, help="discount rate")
@@ -38,33 +39,7 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 list_beta = [0.4, 0.8]
 list_avail_nuc = [0.9]
 
-list_gamma_2dirac = [0.9, 1.1]
-list_gamma_3dirac = [0.8, 1, 1.2]
-list_gamma = list(np.arange(0.9, 1.1, 0.02))
-
-list_weight_gamma_2dirac_uniform = [1 / 2, 1 / 2]
-list_weight_gamma_3dirac_uniform = [1 / 3, 1 / 3, 1/3]
-
-dict_weight_gamma_singleton = {}
-dict_gamma_singleton = {}
-for i in range(len(list_gamma)):  # creating values for dirac
-    gamma = list_gamma[i]
-    name_weight = f"singleton{round(gamma, 2)}"
-    name_weight = name_weight.replace(".", "p")
-    dict_weight_gamma_singleton[name_weight] = [1]
-    dict_gamma_singleton[name_weight] = [gamma]
-
-gamma = {
-    "2dirac": list_gamma_2dirac,
-    "3dirac": list_gamma_3dirac
-}
-weights = {
-    '2dirac': list_weight_gamma_2dirac_uniform,
-    '3dirac': list_weight_gamma_3dirac_uniform
-}
-
-gamma.update(dict_gamma_singleton)
-weights.update(dict_weight_gamma_singleton)
+gamma, weights = generate_distribution_large()
 
 # First test: we only try one value for beta
 # list_beta = [0.6]

@@ -351,7 +351,7 @@ def save_fig(fig, save=None, bbox_inches='tight'):
 
 
 if __name__ == '__main__':
-    gamma, weights = generate_distribution_beta_binomial_large()
+    gamma, weights = generate_distribution_beta_binomial_verylarge()
     distrib = "BetaBinomialHigh"
     gamma_betabinomhigh = np.array(gamma[distrib])
     weight_betabinomhigh = np.array(weights[distrib])

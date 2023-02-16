@@ -293,7 +293,7 @@ def calculate_cvar_par(alpha, start, end, gas_scenarios, proba_worst_demand, Q: 
         coef_f_values = np.concatenate(coef_f_values_list, axis=-1)
         return coef_f_values
 
-    pool = Parallel(n_jobs=8, prefer="threads")
+    pool = Parallel(n_jobs=10)
     coef_f_values = pool(delayed(in_loop)(i) for i in range(gas_scenarios.shape[0]))
     del pool  # TODO: verifier que c'est fait correctement, pas évident
     coef_f_values = np.concatenate(coef_f_values, axis=-1)

@@ -39,7 +39,7 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 list_beta = [0.5, 0.9]
 list_avail_nuc = [0.9]
 
-gamma, weights = generate_distribution_beta_binomial()
+gamma, weights = generate_distribution_beta_binomial_verylarge()
 
 # First test: we only try one value for beta
 # list_beta = [0.6]

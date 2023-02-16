@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import argparse
 from scipy.stats import binom
-from investment.utils import generate_distributions_small, generate_distribution_large, generate_distribution_beta_binomial
+from investment.utils import generate_distributions_small, generate_distribution_large, generate_distribution_beta_binomial, generate_distribution_beta_binomial_large
 
 parser = argparse.ArgumentParser(description='Run investment model.')
 parser.add_argument("-d", "--discount", type=float, help="discount rate")
@@ -36,7 +36,7 @@ discount_rate_yearly, nu_deval, cvar_level, premium_value, market_cap, N, direct
 # discount_rate_yearly, beta, nu_deval, availnuc, cvar_level, N = 0.04, 1, 0.15, 1, 0.05, 20
 
 
-list_beta = [0.4, 0.8]
+list_beta = [0.5, 0.9]
 list_avail_nuc = [0.9]
 
 gamma, weights = generate_distribution_beta_binomial()
@@ -91,7 +91,7 @@ for distrib in list(weights.keys()):
                                      'investment_costs_wind': investment_costs_wind}
 
             # Demand scenarios
-            trans_matrix, demand_states = demand_model_no_uncertainty()
+            trans_matrix, demand_states = demand_model_no_uncertainty()  # TODO: ligne à modifier si besoin
 
             # Scenario gas prices
             np.random.seed(123)
@@ -161,7 +161,8 @@ for distrib in list(weights.keys()):
                                                                                      x_cutoff=x_cutoff,
                                                                                      y_cutoff=y_cutoff,
                                                                                      add_params=additional_parameters,
-                                                                                     convergence="wolfe")
+                                                                                     convergence="wolfe",
+                                                                                     deval=True)
 
             # Process output
             subdirectory_name = directory_name + f"/weight{distrib}_beta{beta}_discount{discount_rate_yearly}_nu{nu_deval}_premium{premium_value}_availnuc{availnuc}_cvar{cvar_level}_cap{market_cap}"

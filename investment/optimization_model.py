@@ -73,7 +73,7 @@ def supply_function_np_piecewise(x: np.ndarray, x_cutoff: np.ndarray, y_cutoff: 
 
 def supply_function_np_piecewise_constant(x: np.ndarray, x_cutoff: np.ndarray, y_cutoff: np.ndarray, voll):
     """
-    Returns price corresponding to residual demand. Piecewise constanat function.
+    Returns price corresponding to residual demand. Piecewise constant function.
     Parameters
     ----------
     x: residual demand
@@ -329,14 +329,16 @@ def coefficient_g(T, Tprime, Q: np.ndarray, D_average, premium, weather_params, 
 def coefficient_g_no_deval(T, Tprime, Q: np.ndarray, D_average, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff,
                   add_params):
     """Returns coefficient g representing the end of the profit after time T, which depends
-    on the value of demand at time T-1. Q represents invested capacity at time T (and not time T-1 !!)"""
+    on the value of demand at time T-1. Q represents invested capacity at time T (and not time T-1 !!)
+    We do not represent the devaluation here for the rest of the renewables, but we keep the devaluation for the
+    invested capacity of the given player at time T."""
     assert Q.ndim - 1 == T  # corresponds to investment decision at time T-1 (after being devaluated once), plus one
     # dimension for sun and wind
     discount_rate, nu_deval = add_params['discount_rate'], add_params['nu_deval']
     if Tprime > T:
         coef_g = - coefficient_f(Q, D_average, premium, weather_params, Q_offshore, tec, x_cutoff, y_cutoff, add_params)
         for t in range(T + 1, Tprime, 1):
-            coef_g += -np.exp(-discount_rate * (t - T)) * coefficient_f(Q, D_average, premium, weather_params,
+            coef_g += -np.exp(-discount_rate * (t - T)) * (1 - nu_deval) ** (t - T) * coefficient_f(Q, D_average, premium, weather_params,
                                                                          Q_offshore, tec, x_cutoff, y_cutoff,
                                                                          add_params)  # shape (d,)*(T+1)
     else:
@@ -463,7 +465,7 @@ def recursive_optimal_control(t, q_next, trans_matrix, demand_states, beta, list
 
 def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end, gas_scenarios, Q_T_1,
                           premium, weather_params, weather_tot_params, Q_offshore_T_1, tec, x_cutoff_T_1,
-                          y_cutoff_T_1, add_params):
+                          y_cutoff_T_1, add_params, deval):
     """NEW VERSION. Finds the value of optimal control final. Q corresponds to investment decisions by other agents at time
     T-1. Shape (d,)*(T)"""
     assert T == trans_matrix.shape[0]
@@ -490,9 +492,13 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gam
 
     assert expectation_coefficient_f.shape == cvar_coefficient_f.shape
 
-    # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
-    coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
-                                                Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+    if not deval:
+        # TODO: attention !! je teste quelque chose pour la fin de l'horizon, je supprime la dévaluation
+        coef_g_values = concatenate_coef_g_no_deval(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
+                                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
+    else:
+        coef_g_values = concatenate_coef_g(T, Tprime, Q_T_1, D_average_T_1, premium, weather_params,
+                                                    Q_offshore_T_1, tec, x_cutoff_T_1, y_cutoff_T_1, add_params)
 
     expectation_coefficient_f_tilde_gamma = []
     coef_g_values_listgamma = []
@@ -527,7 +533,7 @@ def optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gam
 
 def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end, gas_scenarios, Q: list,
                          premium, weather_params, weather_tot_params, Q_offshore, tec,
-                         x_cutoff: list, y_cutoff: list, add_params):
+                         x_cutoff: list, y_cutoff: list, add_params, deval):
     """
     NEW VERSION. Algorithm computing the optimal control strategy conditioned on other players' action Q
     Parameters
@@ -558,7 +564,7 @@ def find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamm
     control_final = optimal_control_final(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                           gas_scenarios, Q[T - 1], premium[T - 1], weather_params,
                                           weather_tot_params, Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
-                                          add_params)  # shape (L,) + (d,)*T
+                                          add_params, deval)  # shape (L,) + (d,)*T
     optimal_strategy.insert(0, control_final)
     # optimal_strategy[T - 1, :] = control_final
     control_next = control_final
@@ -708,14 +714,14 @@ def cost_time_t(t, opt_control_t, state_distribution_t, other_state_distribution
         # remark: we reshape to add a dimension for the beta coefficient
         # TODO: il y a peut-être des erreurs de broadcast ici
 
-        cost_gamma = list_gamma[i] * (cvar_cost_gamma.sum() + expected_cost_gamma.sum()) + investment_cost_gamma.sum()   # float
+        cost_gamma = list_gamma[i] * (cvar_cost_gamma.sum() + expected_cost_gamma.sum()) + investment_cost_gamma.sum()  # float
         list_cost_gamma.append(cost_gamma)
     return list_cost_gamma, proba_time_t_next
 
 
 def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribution, trans_matrix, demand_states, beta, list_gamma,
                 list_weight_gamma, alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, tec,
-                x_cutoff: list, y_cutoff: list, add_params):
+                x_cutoff: list, y_cutoff: list, add_params, deval):
     """Returns total player's cost for a given strategy and corresponding state distribution"""
     discount_rate, nu_deval = add_params["discount_rate"], add_params["nu_deval"]
     assert len(opt_control) == len(state_distribution) == len(other_state_distribution) == trans_matrix.shape[0] == T
@@ -741,10 +747,16 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
     D_average_T = demand_states[T - 1, :]
     # Q_T = other_state_distribution[T - 1] * (1 - nu_deval)
     Q_T = other_state_distribution[T - 1]
-    # TODO: attention, j'ai changé cela pour arrêter la dévaluation, il pourrait y avoir une erreur
-    coef_g = concatenate_coef_g_no_deval(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
-                                Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
-                                add_params)  # shape (d,)*(T+1)
+
+    if not deval:  # we remove devaluation for the end of the time horizon
+        # TODO: attention, j'ai changé cela pour arrêter la dévaluation, il pourrait y avoir une erreur
+        coef_g = concatenate_coef_g_no_deval(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
+                                    Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
+                                    add_params)  # shape (d,)*(T+1)
+    else:
+        coef_g = concatenate_coef_g(T, Tprime, Q_T, D_average_T, premium[T - 1], weather_params,
+                                    Q_offshore[T - 1], tec, x_cutoff[T - 1], y_cutoff[T - 1],
+                                    add_params)  # shape (d,)*(T+1)
 
     list_final_cost_gamma = []
     if tec == 'sun':  # TODO: pareil, j'ai changé pour enlever la dévaluation de coef_g, il pourrait y avoir des bugs
@@ -774,7 +786,7 @@ def player_cost(T, Tprime, opt_control, state_distribution, other_state_distribu
 
 def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma, alpha, start, end,
                     gas_scenarios, premium, weather_params, weather_tot_params, Q_offshore, x_cutoff, y_cutoff,
-                    add_params, convergence):
+                    add_params, convergence, deval):
 
     """
     Remarque: faire attention, ici state_distribution et average_state_distribution sont différents. Dans un cas, c'est
@@ -815,38 +827,41 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
         TIKTOK.interval("optimal_control", display=False)
         opt_control_sun = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                                gas_scenarios, average_state_distribution, premium, weather_params,
-                                               weather_tot_params, Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
+                                               weather_tot_params, Q_offshore, "sun", x_cutoff, y_cutoff, add_params,
+                                               deval)
 
         opt_control_wind = find_optimal_control(T, Tprime, trans_matrix, demand_states, beta, list_gamma, alpha, start, end,
                                                 gas_scenarios, average_state_distribution, premium, weather_params,
-                                                weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
+                                                weather_tot_params, Q_offshore, "wind", x_cutoff, y_cutoff, add_params,
+                                                deval)
 
         # Finding associated state distribution
         new_state_distribution = state_distribution_from_control(opt_control_sun, opt_control_wind, add_params)  # distribution over Q, including gamma heterogeneity
         new_average_state_distribution = average_state_distribution_gamma(new_state_distribution, list_gamma, list_weight_gamma)  # average distribution for \gamma * Q
 
-        if n % 20 == 0:
+        # Calcul du gap pour vérifier la convergence
+        if ((n >= 20) & (n % 20 == 0)) or ((n < 20) and (n % 5 == 0)):
             TIKTOK.interval("optimal_control", display=True)
             # TODO: a corriger !! il faut modifier l'appel à new_state_distribution, car on a des états qui diffèrent selon le paramètre beta
             current_player_cost_sun = player_cost(T, Tprime, opt_control_sun, new_state_distribution,
                                                   average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                   alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
-                                                  Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
+                                                  Q_offshore, "sun", x_cutoff, y_cutoff, add_params, deval)
 
             previous_player_cost_sun = player_cost(T, Tprime, previous_control_sun, state_distribution,
                                                    average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                    alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
-                                                   Q_offshore, "sun", x_cutoff, y_cutoff, add_params)
+                                                   Q_offshore, "sun", x_cutoff, y_cutoff, add_params, deval)
 
             current_player_cost_wind = player_cost(T, Tprime, opt_control_wind, new_state_distribution,
                                                    average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                    alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
-                                                   Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
+                                                   Q_offshore, "wind", x_cutoff, y_cutoff, add_params, deval)
 
             previous_player_cost_wind = player_cost(T, Tprime, previous_control_wind, state_distribution,
                                                     average_state_distribution, trans_matrix, demand_states, beta, list_gamma, list_weight_gamma,
                                                     alpha, start, end, gas_scenarios, premium, weather_params, weather_tot_params,
-                                                    Q_offshore, "wind", x_cutoff, y_cutoff, add_params)
+                                                    Q_offshore, "wind", x_cutoff, y_cutoff, add_params, deval)
 
             gap = (current_player_cost_sun - previous_player_cost_sun) + (
                     current_player_cost_wind - previous_player_cost_wind)
@@ -856,6 +871,8 @@ def fictitious_play(N, T, Tprime, state_init: list, trans_matrix, demand_states,
             index_objective_gap.append(n + 1)
             if n % 100 == 0:
                 print(f'Objective gap: {objective_gap}', flush=True)
+
+        # Update distribution
         if convergence == 'wolfe':
             average_state_distribution = [2 / (n + 2) * new_state + n / (n + 2) * state
                                   for new_state, state in zip(new_average_state_distribution, average_state_distribution)]  # average distribution over \gamma * Q

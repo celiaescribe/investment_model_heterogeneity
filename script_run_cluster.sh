@@ -16,4 +16,4 @@
 module load anaconda3/2020.11 #cuda/10.2
 
 ## execution
-python run_cluster_heterogeneity.py -d 0.04 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 140 -dir "gamma_heterogeneity_no_demand_uncertainty"
+python run_cluster_heterogeneity.py -d 0.086 -n 0.15 --cvar 0.05 -p 0 --cap 10000 -i 140 -dir "gamma_heterogeneity_no_demand_uncertainty"

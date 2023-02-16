@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import argparse
 from scipy.stats import binom
-from investment.utils import generate_distributions_small, generate_distribution_large, generate_distribution_beta_binomial, generate_distribution_beta_binomial_large
+from investment.utils import generate_distributions_small, generate_distribution_large, generate_distribution_beta_binomial, generate_distribution_beta_binomial_large, generate_distribution_beta_binomial_verylarge
 
 parser = argparse.ArgumentParser(description='Run investment model.')
 parser.add_argument("-d", "--discount", type=float, help="discount rate")
